@@ -2321,6 +2321,8 @@
             renderAllPrograms();
             renderHistory();
             renderAdminTable();
+            renderAdminFinance();
+            renderReports();
 
             switchTab('success');
             showToast('Pembayaran berhasil dikonfirmasi!');
@@ -3238,6 +3240,8 @@
             renderAdminCampaigns();
             renderAllPrograms();
             renderHomePrograms();
+            renderAdminFinance();
+            renderReports();
             showToast(`Status program diubah menjadi ${p.status}`);
         }
 
@@ -3249,6 +3253,8 @@
             renderAdminCampaigns();
             renderAllPrograms();
             renderHomePrograms();
+            renderAdminFinance();
+            renderReports();
             showToast('Program berhasil dihapus');
         }
 
@@ -3415,6 +3421,8 @@
             renderHomePrograms();
             renderAllPrograms();
             renderAdminCampaigns();
+            renderAdminFinance();
+            renderReports();
             closeNewProgramModal();
         }
 
