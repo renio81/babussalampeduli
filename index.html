@@ -45,6 +45,54 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
+    <!-- ============ FIREBASE (FIRESTORE REALTIME) ============ -->
+    <!-- GANTI seluruh objek firebaseConfig di bawah ini dengan config dari Firebase Console kamu -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import {
+            getFirestore, collection, doc, addDoc, setDoc, updateDoc, deleteDoc,
+            onSnapshot, query, orderBy, getDocs, increment, serverTimestamp, writeBatch
+        } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        // >>> GANTI DENGAN firebaseConfig ASLI DARI FIREBASE CONSOLE KAMU <<<
+        const firebaseConfig = {
+            apiKey: "AIzaSyDuwUGRpQPLW6DWanC1w3pQvZbv0a-TKPI",
+            authDomain: "babussalampeduli.firebaseapp.com",
+            projectId: "babussalampeduli",
+            storageBucket: "babussalampeduli.firebasestorage.app",
+            messagingSenderId: "531358283261",
+            appId: "1:531358283261:web:e71366b9086bd82e6a5594",
+            measurementId: "G-HPQTY6HZT3"
+        };
+
+        const isConfigured = firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith('GANTI');
+
+        window.firebaseState = { connected: false, configured: isConfigured, error: null };
+
+        if (isConfigured) {
+            try {
+                const app = initializeApp(firebaseConfig);
+                const db = getFirestore(app);
+
+                // Expose Firestore instance & helper functions secara global
+                // supaya bisa dipakai dari script utama (non-module) di bawah.
+                window.db = db;
+                window.fx = {
+                    collection, doc, addDoc, setDoc, updateDoc, deleteDoc,
+                    onSnapshot, query, orderBy, getDocs, increment, serverTimestamp, writeBatch
+                };
+                window.firebaseState.connected = true;
+            } catch (err) {
+                console.error('Firebase init error:', err);
+                window.firebaseState.error = err.message;
+            }
+        }
+
+        // Beritahu script utama bahwa proses inisialisasi Firebase sudah selesai
+        // (baik berhasil terhubung, gagal, maupun belum dikonfigurasi).
+        window.dispatchEvent(new CustomEvent('firebase-init-done'));
+    </script>
+
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -76,6 +124,11 @@
     </style>
 </head>
 <body class="h-full text-slate-800 flex flex-col antialiased selection:bg-emerald-100 selection:text-emerald-800">
+
+    <!-- Status Koneksi Firebase -->
+    <div id="firebase-status-banner" class="hidden fixed top-0 left-0 right-0 z-[70] text-center text-[11px] font-semibold py-2 px-4">
+        <span id="firebase-status-text"></span>
+    </div>
 
     <div id="app" class="min-h-screen flex flex-col md:flex-row bg-slate-50 relative pb-20 md:pb-0">
         
@@ -111,6 +164,10 @@
                 <a href="#" onclick="switchTab('volunteer')" id="dnav-volunteer" class="sidebar-link flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition">
                     <i class="fa-solid fa-hands-helping w-5 text-center text-emerald-400"></i>
                     <span>Jadi Relawan</span>
+                </a>
+                <a href="#" onclick="switchTab('about')" id="dnav-about" class="sidebar-link flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition">
+                    <i class="fa-solid fa-circle-info w-5 text-center text-emerald-400"></i>
+                    <span>Tentang Kami</span>
                 </a>
 
                 <div class="pt-4 pb-2">
@@ -221,19 +278,19 @@
                     <!-- Statistics Banner -->
                     <div class="bg-gradient-to-r from-emerald-50 to-emerald-100/50 rounded-2xl p-4 sm:p-6 border border-emerald-200/60 grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                         <div>
-                            <p class="text-xl sm:text-2xl font-extrabold text-emerald-900" id="stat-total-donations">Rp725.000.000</p>
+                            <p class="text-xl sm:text-2xl font-extrabold text-emerald-900" id="stat-total-donations">Rp0</p>
                             <p class="text-xs text-emerald-700 font-medium">Total Bantuan Tersalurkan</p>
                         </div>
                         <div>
-                            <p class="text-xl sm:text-2xl font-extrabold text-emerald-900" id="stat-donors-count">4.821</p>
+                            <p class="text-xl sm:text-2xl font-extrabold text-emerald-900" id="stat-donors-count">0</p>
                             <p class="text-xs text-emerald-700 font-medium">Donatur Dermawan</p>
                         </div>
                         <div>
-                            <p class="text-xl sm:text-2xl font-extrabold text-emerald-900" id="stat-active-programs">24</p>
+                            <p class="text-xl sm:text-2xl font-extrabold text-emerald-900" id="stat-active-programs">0</p>
                             <p class="text-xs text-emerald-700 font-medium">Program Sosial Aktif</p>
                         </div>
                         <div>
-                            <p class="text-xl sm:text-2xl font-extrabold text-emerald-900" id="stat-beneficiaries">8.420</p>
+                            <p class="text-xl sm:text-2xl font-extrabold text-emerald-900" id="stat-beneficiaries">0</p>
                             <p class="text-xs text-emerald-700 font-medium">Penerima Manfaat</p>
                         </div>
                     </div>
@@ -609,8 +666,8 @@
                             <p class="text-xs text-slate-500 mt-1">Audit terbuka penyaluran dana kebaikan masyarakat</p>
                         </div>
                         <div class="flex items-center gap-2 shrink-0">
-                            <button onclick="window.print()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-xs transition flex items-center gap-2">
-                                <i class="fa-solid fa-print"></i> Cetak
+                            <button onclick="downloadProgramDetailPDF()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-xs transition flex items-center gap-2">
+                                <i class="fa-solid fa-file-pdf"></i> Unduh PDF (Semua Program)
                             </button>
                             <button onclick="downloadFinancialReport()" class="px-4 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-md transition flex items-center gap-2">
                                 <i class="fa-solid fa-file-excel"></i> Unduh Laporan (Excel)
@@ -633,9 +690,7 @@
 
                     <div class="flex items-center justify-between gap-3">
                         <h4 class="text-sm font-bold text-slate-900">Rincian Laporan per Program</h4>
-                        <button onclick="downloadProgramDetailPDF()" class="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md transition flex items-center gap-2 shrink-0">
-                            <i class="fa-solid fa-file-pdf"></i> Unduh PDF
-                        </button>
+                        <p class="text-[11px] text-slate-400">Unduh PDF tersedia di masing-masing kartu program</p>
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-5" id="transparency-reports-list">
@@ -657,22 +712,22 @@
                         <form id="volunteer-form" onsubmit="handleVolunteerSubmit(event)" class="space-y-4">
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Lengkap *</label>
-                                <input type="text" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none">
+                                <input type="text" id="vol-name" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none">
                             </div>
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
                                     <label class="block text-xs font-semibold text-slate-700 mb-1">Nomor WhatsApp *</label>
-                                    <input type="tel" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none">
+                                    <input type="tel" id="vol-phone" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none">
                                 </div>
                                 <div>
                                     <label class="block text-xs font-semibold text-slate-700 mb-1">Kota / Domisili *</label>
-                                    <input type="text" required placeholder="Jakarta Timur" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none">
+                                    <input type="text" id="vol-city" required placeholder="Jakarta Timur" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none">
                                 </div>
                             </div>
 
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700 mb-1">Bidang Keahlian / Minat *</label>
-                                <select required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none">
+                                <select id="vol-field" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none">
                                     <option value="">-- Pilih Bidang Relawan --</option>
                                     <option value="DISTRIBUSI">Distribusi Makanan & Sembako</option>
                                     <option value="KESEHATAN">Tim Medis & Kesehatan</option>
@@ -685,13 +740,166 @@
 
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700 mb-1">Ketersediaan Waktu</label>
-                                <input type="text" placeholder="Setiap Akhir Pekan / Ahad saja" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none">
+                                <input type="text" id="vol-availability" placeholder="Setiap Akhir Pekan / Ahad saja" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none">
                             </div>
 
                             <button type="submit" class="w-full py-3.5 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-lg shadow-emerald-700/20 transition">
                                 Daftar Sebagai Relawan Aksi
                             </button>
                         </form>
+                    </div>
+                </section>
+
+                <!-- VIEW 10: TENTANG KAMI / PROFIL -->
+                <section id="view-about" class="view-pane hidden space-y-6">
+                    <!-- Hero -->
+                    <div class="bg-gradient-to-br from-emerald-900 to-emerald-700 text-white p-6 sm:p-8 rounded-3xl shadow-xl relative overflow-hidden">
+                        <div class="relative z-10 space-y-3 max-w-2xl">
+                            <span class="px-3 py-1 bg-white/15 rounded-full text-[10px] font-bold uppercase tracking-wide">Tentang Kami</span>
+                            <h2 class="text-2xl sm:text-3xl font-black">Babussalampeduli</h2>
+                            <p class="text-emerald-50 text-sm leading-relaxed">
+                                Lembaga sosial kemanusiaan independen yang menghubungkan kebaikan donatur dengan dhuafa, yatim, dan masyarakat yang membutuhkan secara cepat, transparan, dan tepat sasaran.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Profil -->
+                    <div class="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                        <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-address-card text-emerald-600"></i> Profil Organisasi
+                        </h3>
+                        <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                            Babussalampeduli adalah lembaga sosial kemanusiaan yang bergerak di bidang penghimpunan dan penyaluran dana donasi, zakat, infak, dan sedekah masyarakat. Kami hadir sebagai jembatan kebaikan yang mempertemukan donatur dengan penerima manfaat secara langsung, akuntabel, dan berkelanjutan, didukung sistem pelaporan digital yang terbuka untuk publik.
+                        </p>
+                    </div>
+
+                    <!-- Latar Belakang -->
+                    <div class="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                        <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-book-open text-emerald-600"></i> Latar Belakang
+                        </h3>
+                        <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                            Berangkat dari keprihatinan atas masih banyaknya masyarakat dhuafa, anak yatim, dan kelompok rentan yang belum mendapat akses bantuan secara merata, serta minimnya transparansi dalam pengelolaan dana sosial di sebagian lembaga, Babussalampeduli didirikan untuk menghadirkan solusi berbagi kebaikan yang mudah diakses, cepat tersalurkan, dan dapat dipertanggungjawabkan secara terbuka kepada seluruh donatur.
+                        </p>
+                    </div>
+
+                    <!-- Visi & Misi -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div class="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                            <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                                <i class="fa-solid fa-eye text-emerald-600"></i> Visi
+                            </h3>
+                            <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                                Menjadi lembaga sosial kepercayaan masyarakat yang mengantarkan kebaikan secara transparan, profesional, dan berkelanjutan untuk mewujudkan kesejahteraan umat.
+                            </p>
+                        </div>
+                        <div class="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                            <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                                <i class="fa-solid fa-bullseye text-emerald-600"></i> Misi
+                            </h3>
+                            <ul class="text-xs sm:text-sm text-slate-600 leading-relaxed space-y-2 list-none">
+                                <li class="flex gap-2"><i class="fa-solid fa-check text-emerald-600 mt-0.5"></i><span>Menghimpun dan menyalurkan dana donasi, zakat, infak, dan sedekah secara amanah dan tepat sasaran.</span></li>
+                                <li class="flex gap-2"><i class="fa-solid fa-check text-emerald-600 mt-0.5"></i><span>Mengembangkan program pemberdayaan masyarakat di bidang pangan, kesehatan, pendidikan, dan air bersih.</span></li>
+                                <li class="flex gap-2"><i class="fa-solid fa-check text-emerald-600 mt-0.5"></i><span>Membangun sistem pelaporan keuangan yang transparan dan dapat diakses publik secara terbuka.</span></li>
+                                <li class="flex gap-2"><i class="fa-solid fa-check text-emerald-600 mt-0.5"></i><span>Menggerakkan partisipasi aktif masyarakat melalui program relawan dan kemitraan sosial.</span></li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Tujuan -->
+                    <div class="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                        <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-flag-checkered text-emerald-600"></i> Tujuan
+                        </h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div class="flex gap-2.5 p-3 bg-slate-50 rounded-xl">
+                                <i class="fa-solid fa-hand-holding-heart text-emerald-600 mt-0.5"></i>
+                                <p class="text-xs text-slate-600">Mengurangi kesenjangan sosial dan membantu meringankan beban dhuafa serta yatim.</p>
+                            </div>
+                            <div class="flex gap-2.5 p-3 bg-slate-50 rounded-xl">
+                                <i class="fa-solid fa-shield-heart text-emerald-600 mt-0.5"></i>
+                                <p class="text-xs text-slate-600">Memastikan setiap dana donasi tersalurkan tepat sasaran dan dapat dipertanggungjawabkan.</p>
+                            </div>
+                            <div class="flex gap-2.5 p-3 bg-slate-50 rounded-xl">
+                                <i class="fa-solid fa-seedling text-emerald-600 mt-0.5"></i>
+                                <p class="text-xs text-slate-600">Meningkatkan kualitas hidup penerima manfaat melalui program yang berkelanjutan.</p>
+                            </div>
+                            <div class="flex gap-2.5 p-3 bg-slate-50 rounded-xl">
+                                <i class="fa-solid fa-people-arrows text-emerald-600 mt-0.5"></i>
+                                <p class="text-xs text-slate-600">Menjadi jembatan kebaikan yang menghubungkan donatur dengan penerima manfaat.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Program -->
+                    <div class="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                        <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-layer-group text-emerald-600"></i> Program Kami
+                        </h3>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3" id="about-program-list">
+                            <!-- Rendered dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Informasi Sekretariat -->
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div class="p-5 sm:p-6 space-y-4">
+                            <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                                <i class="fa-solid fa-building-flag text-emerald-600"></i> Informasi Sekretariat
+                            </h3>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                                <div class="flex gap-3 p-3.5 bg-slate-50 rounded-xl">
+                                    <div class="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0"><i class="fa-solid fa-location-dot"></i></div>
+                                    <div>
+                                        <p class="font-bold text-slate-800 mb-0.5">Alamat Sekretariat</p>
+                                        <p class="text-slate-500">Jl. Raya Parung No. 88, Kec. Parung, Kabupaten Bogor, Jawa Barat 16330</p>
+                                    </div>
+                                </div>
+                                <div class="flex gap-3 p-3.5 bg-slate-50 rounded-xl">
+                                    <div class="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0"><i class="fa-solid fa-envelope"></i></div>
+                                    <div>
+                                        <p class="font-bold text-slate-800 mb-0.5">Email</p>
+                                        <a href="mailto:info@babussalampeduli.org" class="text-emerald-700 hover:underline">info@babussalampeduli.org</a>
+                                    </div>
+                                </div>
+                                <div class="flex gap-3 p-3.5 bg-slate-50 rounded-xl">
+                                    <div class="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0"><i class="fa-brands fa-whatsapp"></i></div>
+                                    <div>
+                                        <p class="font-bold text-slate-800 mb-0.5">Telepon / WhatsApp</p>
+                                        <a href="https://wa.me/6281316426495" target="_blank" rel="noopener" class="text-emerald-700 hover:underline">0813-1642-6495</a>
+                                    </div>
+                                </div>
+                                <div class="flex gap-3 p-3.5 bg-slate-50 rounded-xl">
+                                    <div class="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0"><i class="fa-solid fa-clock"></i></div>
+                                    <div>
+                                        <p class="font-bold text-slate-800 mb-0.5">Jam Operasional</p>
+                                        <p class="text-slate-500">Senin - Sabtu, 08.00 - 17.00 WIB</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <p class="text-[10px] text-slate-400 italic">
+                                *Alamat & email di atas bersifat contoh — silakan sesuaikan dengan data resmi sekretariat Babussalampeduli Anda melalui tim pengembang.
+                            </p>
+                        </div>
+
+                        <!-- Maps -->
+                        <div class="border-t border-slate-200">
+                            <iframe
+                                src="https://www.google.com/maps?q=Parung,Kabupaten+Bogor,Jawa+Barat&output=embed"
+                                class="w-full h-64 sm:h-80 border-0"
+                                loading="lazy"
+                                referrerpolicy="no-referrer-when-downgrade">
+                            </iframe>
+                            <div class="p-4 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50">
+                                <p class="text-xs text-slate-500">Lihat lokasi sekretariat kami di Google Maps</p>
+                                <a href="https://www.google.com/maps/search/?api=1&query=Parung%2C+Kabupaten+Bogor%2C+Jawa+Barat" target="_blank" rel="noopener"
+                                   class="px-4 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-md transition flex items-center gap-2 shrink-0">
+                                    <i class="fa-solid fa-map-location-dot"></i> Buka di Google Maps
+                                </a>
+                            </div>
+                        </div>
                     </div>
                 </section>
 
@@ -714,19 +922,19 @@
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div class="bg-white p-4 rounded-2xl border border-slate-200">
                             <p class="text-[11px] font-semibold text-slate-500">Total Masuk</p>
-                            <p class="text-lg font-black text-slate-900 mt-1" id="adm-stat-total">Rp725.000.000</p>
+                            <p class="text-lg font-black text-slate-900 mt-1" id="adm-stat-total">Rp0</p>
                         </div>
                         <div class="bg-white p-4 rounded-2xl border border-slate-200">
                             <p class="text-[11px] font-semibold text-slate-500">Menunggu Verifikasi</p>
-                            <p class="text-lg font-black text-amber-600 mt-1" id="adm-stat-pending">3 Transaksi</p>
+                            <p class="text-lg font-black text-amber-600 mt-1" id="adm-stat-pending">0 Transaksi</p>
                         </div>
                         <div class="bg-white p-4 rounded-2xl border border-slate-200">
                             <p class="text-[11px] font-semibold text-slate-500">Program Aktif</p>
-                            <p class="text-lg font-black text-emerald-700 mt-1" id="adm-stat-programs">24 Program</p>
+                            <p class="text-lg font-black text-emerald-700 mt-1" id="adm-stat-programs">0 Program</p>
                         </div>
                         <div class="bg-white p-4 rounded-2xl border border-slate-200">
                             <p class="text-[11px] font-semibold text-slate-500">Relawan Terdaftar</p>
-                            <p class="text-lg font-black text-blue-700 mt-1">325 Orang</p>
+                            <p class="text-lg font-black text-blue-700 mt-1" id="adm-stat-volunteers">0 Orang</p>
                         </div>
                     </div>
 
@@ -903,20 +1111,14 @@
                             </div>
 
                             <div class="space-y-3 pt-2">
-                                <h5 class="text-xs font-bold text-slate-800">Daftar Rekening Bank Resmi</h5>
-                                <div class="bg-white p-4 border rounded-xl space-y-2 text-xs">
-                                    <div class="flex justify-between items-center py-1 border-b">
-                                        <span><strong>Bank Syariah Indonesia (BSI)</strong> - 700 888 999 1 (a.n. Babussalampeduli)</span>
-                                        <span class="text-emerald-600 font-bold">Aktif</span>
-                                    </div>
-                                    <div class="flex justify-between items-center py-1 border-b">
-                                        <span><strong>Bank Central Asia (BCA)</strong> - 883 092 110 0 (a.n. Babussalampeduli)</span>
-                                        <span class="text-emerald-600 font-bold">Aktif</span>
-                                    </div>
-                                    <div class="flex justify-between items-center py-1">
-                                        <span><strong>Bank Mandiri</strong> - 122 000 981 771 (a.n. Babussalampeduli)</span>
-                                        <span class="text-emerald-600 font-bold">Aktif</span>
-                                    </div>
+                                <div class="flex items-center justify-between">
+                                    <h5 class="text-xs font-bold text-slate-800">Daftar Rekening Bank Resmi</h5>
+                                    <button onclick="openBankModal()" class="px-3 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] shadow-md transition flex items-center gap-1.5">
+                                        <i class="fa-solid fa-plus"></i> Tambah Rekening
+                                    </button>
+                                </div>
+                                <div class="bg-white p-4 border rounded-xl space-y-1 text-xs" id="admin-bank-list">
+                                    <!-- Rendered dynamically -->
                                 </div>
                             </div>
                         </div>
@@ -1209,6 +1411,44 @@
         </div>
     </div>
 
+    <!-- MODAL: TAMBAH / EDIT REKENING BANK (ADMIN) -->
+    <div id="modal-bank" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <button onclick="closeBankModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-700">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+
+            <h4 class="text-base font-bold text-slate-900" id="modal-bank-title">Tambah Rekening Bank</h4>
+
+            <form onsubmit="handleSaveBank(event)" class="space-y-3 text-xs">
+                <input type="hidden" id="bank-edit-id" value="">
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Nama Bank</label>
+                    <input type="text" id="bank-name" required placeholder="Bank Central Asia (BCA)" class="w-full p-2.5 bg-slate-50 border rounded-xl font-medium outline-none">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Nomor Rekening</label>
+                    <input type="text" id="bank-number" required placeholder="883 092 110 0" class="w-full p-2.5 bg-slate-50 border rounded-xl font-medium outline-none">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Atas Nama</label>
+                    <input type="text" id="bank-holder" required value="Babussalampeduli" class="w-full p-2.5 bg-slate-50 border rounded-xl font-medium outline-none">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Status</label>
+                    <select id="bank-status" class="w-full p-2.5 bg-slate-50 border rounded-xl font-medium">
+                        <option value="Aktif">Aktif</option>
+                        <option value="Nonaktif">Nonaktif</option>
+                    </select>
+                </div>
+
+                <button type="submit" id="bank-modal-submit-btn" class="w-full py-3 rounded-2xl bg-emerald-700 text-white font-bold text-xs shadow-lg">
+                    Simpan Rekening
+                </button>
+            </form>
+        </div>
+    </div>
+
     <!-- TOAST NOTIFICATION CONTAINER -->
     <div id="toast-container" class="fixed top-5 right-5 z-50 space-y-2 pointer-events-none"></div>
 
@@ -1225,16 +1465,16 @@
                 category: 'MAKAN',
                 location: 'Jakarta Timur',
                 date: 'Ahad, 12 Mei 2026',
-                collected: 85000000,
+                collected: 0,
                 target: 100000000,
-                donorsCount: 342,
-                volunteersCount: 45,
-                beneficiariesCount: '120 Keluarga',
+                donorsCount: 0,
+                volunteersCount: 0,
+                beneficiariesCount: '0',
                 status: 'AKTIF',
                 image: 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?q=80&w=800&auto=format&fit=crop',
                 description: 'Program rutin pembagian paket makanan bergizi lengkap untuk para pekerja harian, tukang becak, dan dhuafa di wilayah Jakarta Timur.',
-                spent: 60000000,
-                balance: 25000000
+                spent: 0,
+                balance: 0
             },
             {
                 id: 'PROG-002',
@@ -1242,16 +1482,16 @@
                 category: 'SEMBAKO',
                 location: 'Garut, Jawa Barat',
                 date: 'Sabtu, 18 Mei 2026',
-                collected: 42000000,
+                collected: 0,
                 target: 50000000,
-                donorsCount: 189,
-                volunteersCount: 20,
-                beneficiariesCount: '250 KK Dhuafa',
+                donorsCount: 0,
+                volunteersCount: 0,
+                beneficiariesCount: '0',
                 status: 'AKTIF',
                 image: 'https://images.unsplash.com/photo-1593113598332-cd288d649433?q=80&w=800&auto=format&fit=crop',
                 description: 'Distribusi beras, minyak goreng, gula, dan kebutuhan bahan pokok pokok lainnya ke daerah terpencil yang belum terjangkau.',
-                spent: 30000000,
-                balance: 12000000
+                spent: 0,
+                balance: 0
             },
             {
                 id: 'PROG-003',
@@ -1259,16 +1499,16 @@
                 category: 'KESEHATAN',
                 location: 'Bogor, Jawa Barat',
                 date: 'Kamis, 22 Mei 2026',
-                collected: 125000000,
+                collected: 0,
                 target: 150000000,
-                donorsCount: 512,
-                volunteersCount: 60,
-                beneficiariesCount: '500 Pasien',
+                donorsCount: 0,
+                volunteersCount: 0,
+                beneficiariesCount: '0',
                 status: 'AKTIF',
                 image: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?q=80&w=800&auto=format&fit=crop',
                 description: 'Pemeriksaan kesehatan gratis, cek laboratorium dasar, dan pembagian obat-obatan gratis serta vitamin untuk lansia dan anak-anak.',
-                spent: 90000000,
-                balance: 35000000
+                spent: 0,
+                balance: 0
             },
             {
                 id: 'PROG-004',
@@ -1276,16 +1516,16 @@
                 category: 'PENDIDIKAN',
                 location: 'Tangerang Selatan',
                 date: 'Senin, 1 Juni 2026',
-                collected: 65000000,
+                collected: 0,
                 target: 80000000,
-                donorsCount: 230,
-                volunteersCount: 15,
-                beneficiariesCount: '100 Anak Yatim',
+                donorsCount: 0,
+                volunteersCount: 0,
+                beneficiariesCount: '0',
                 status: 'AKTIF',
                 image: 'https://images.unsplash.com/photo-1509062522246-3755977927d7?q=80&w=800&auto=format&fit=crop',
                 description: 'Santunan pendidikan, sepatu, tas sekolah, dan alat tulis untuk anak-anak yatim berprestasi dari keluarga tidak mampu.',
-                spent: 40000000,
-                balance: 25000000
+                spent: 0,
+                balance: 0
             }
         ];
 
@@ -1300,18 +1540,7 @@
 
         let state = {
             programs: DEFAULT_PROGRAMS,
-            donations: [
-                {
-                    id: 'TRX-82910381',
-                    programId: 'PROG-001',
-                    programTitle: 'Makan Gratis Untuk Dhuafa & Pekerja Jalanan',
-                    donorName: 'Ahmad Rizky',
-                    amount: 100000,
-                    method: 'QRIS',
-                    status: 'SUCCESS',
-                    date: '12 Mei 2026, 10:15 WIB'
-                }
-            ],
+            donations: [],
             currentProgram: null,
             donationWizard: {
                 nominal: 100000,
@@ -1324,18 +1553,31 @@
             },
             currentTx: null,
             expenses: [],
+            volunteers: [],
+            bankAccounts: [
+                { id: 'BANK-001', bankName: 'Bank Syariah Indonesia (BSI)', accountNumber: '700 888 999 1', accountHolder: 'Babussalampeduli', status: 'Aktif' },
+                { id: 'BANK-002', bankName: 'Bank Central Asia (BCA)', accountNumber: '883 092 110 0', accountHolder: 'Babussalampeduli', status: 'Aktif' },
+                { id: 'BANK-003', bankName: 'Bank Mandiri', accountNumber: '122 000 981 771', accountHolder: 'Babussalampeduli', status: 'Aktif' }
+            ],
             isAdminAuthenticated: false,
             menu: [
                 { key: 'home', label: 'Beranda', desc: 'Halaman utama aplikasi', icon: 'fa-house', visible: true },
                 { key: 'program', label: 'Program Sosial', desc: 'Katalog & riwayat donasi', icon: 'fa-layer-group', visible: true },
                 { key: 'reports', label: 'Transparansi & Laporan', desc: 'Laporan keuangan publik', icon: 'fa-chart-line', visible: true },
-                { key: 'volunteer', label: 'Jadi Relawan', desc: 'Formulir pendaftaran relawan', icon: 'fa-hands-helping', visible: true }
+                { key: 'volunteer', label: 'Jadi Relawan', desc: 'Formulir pendaftaran relawan', icon: 'fa-hands-helping', visible: true },
+                { key: 'about', label: 'Tentang Kami', desc: 'Profil, visi misi & sekretariat', icon: 'fa-circle-info', visible: true }
             ]
         };
 
         // Initialize App
         window.onload = function() {
             renderCategories();
+            initGallery();
+            switchTab('home');
+            bootApp();
+        };
+
+        function renderAllData() {
             renderHomePrograms();
             renderAllPrograms();
             renderHistory();
@@ -1345,10 +1587,159 @@
             renderAdminCampaigns();
             renderAdminFinance();
             renderAdminMenuList();
+            renderAboutPrograms();
+            renderAdminBankAccounts();
+            renderDonorBankAccounts();
             applyMenuVisibility();
-            initGallery();
-            switchTab('home');
-        };
+            refreshAllStats();
+        }
+
+        // ============ FIREBASE: BOOTSTRAP & REALTIME SYNC ============
+        function isFirebaseActive() {
+            return !!(window.firebaseState && window.firebaseState.configured && window.firebaseState.connected && window.db && window.fx);
+        }
+
+        function bootApp() {
+            if (window.firebaseState) {
+                proceedBoot();
+            } else {
+                let started = false;
+                window.addEventListener('firebase-init-done', () => {
+                    if (!started) { started = true; proceedBoot(); }
+                });
+                // Jaga-jaga jika modul Firebase lambat/gagal dimuat dari CDN
+                setTimeout(() => { if (!started) { started = true; proceedBoot(); } }, 4000);
+            }
+        }
+
+        function proceedBoot() {
+            const fs = window.firebaseState || { configured: false, connected: false };
+            if (fs.configured && fs.connected) {
+                showFirebaseBanner('connected');
+                initFirebaseSync();
+            } else if (fs.configured && !fs.connected) {
+                showFirebaseBanner('error', fs.error);
+                renderAllData();
+            } else {
+                showFirebaseBanner('not-configured');
+                renderAllData();
+            }
+        }
+
+        function showFirebaseBanner(type, message) {
+            const banner = document.getElementById('firebase-status-banner');
+            const text = document.getElementById('firebase-status-text');
+            if (!banner || !text) return;
+            banner.classList.remove('hidden');
+
+            if (type === 'connected') {
+                banner.className = 'fixed top-0 left-0 right-0 z-[70] text-center text-[11px] font-semibold py-2 px-4 bg-emerald-600 text-white';
+                text.innerHTML = '<i class="fa-solid fa-circle-check"></i> Terhubung ke Firebase — data tersinkron real-time';
+                setTimeout(() => banner.classList.add('hidden'), 4000);
+            } else if (type === 'error') {
+                banner.className = 'fixed top-0 left-0 right-0 z-[70] text-center text-[11px] font-semibold py-2 px-4 bg-rose-600 text-white';
+                text.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Gagal terhubung ke Firebase${message ? ' (' + message + ')' : ''} — mode lokal sementara digunakan`;
+            } else {
+                banner.className = 'fixed top-0 left-0 right-0 z-[70] text-center text-[11px] font-semibold py-2 px-4 bg-amber-500 text-white';
+                text.innerHTML = '<i class="fa-solid fa-plug-circle-exclamation"></i> Firebase belum dikonfigurasi — data berjalan di mode lokal (tidak realtime)';
+            }
+        }
+
+        // Helper tulis ke Firestore (dipanggil "fire-and-forget", aman dipanggil meski Firebase tidak aktif)
+        async function dbSet(colName, id, data) {
+            if (!isFirebaseActive()) return;
+            try {
+                await window.fx.setDoc(window.fx.doc(window.db, colName, id), data);
+            } catch (err) {
+                console.error(`dbSet(${colName}/${id}) gagal:`, err);
+                showToast('Gagal menyimpan ke Firebase, periksa koneksi', 'info');
+            }
+        }
+        async function dbUpdate(colName, id, data) {
+            if (!isFirebaseActive()) return;
+            try {
+                await window.fx.updateDoc(window.fx.doc(window.db, colName, id), data);
+            } catch (err) {
+                console.error(`dbUpdate(${colName}/${id}) gagal:`, err);
+                showToast('Gagal memperbarui data di Firebase', 'info');
+            }
+        }
+        async function dbDelete(colName, id) {
+            if (!isFirebaseActive()) return;
+            try {
+                await window.fx.deleteDoc(window.fx.doc(window.db, colName, id));
+            } catch (err) {
+                console.error(`dbDelete(${colName}/${id}) gagal:`, err);
+                showToast('Gagal menghapus data di Firebase', 'info');
+            }
+        }
+
+        async function initFirebaseSync() {
+            const { collection, doc, getDocs, onSnapshot, query, orderBy, setDoc } = window.fx;
+            const db = window.db;
+
+            // Seed data awal ke Firestore HANYA jika koleksi 'programs' masih kosong
+            try {
+                const progSnap = await getDocs(collection(db, 'programs'));
+                if (progSnap.empty) {
+                    for (const p of DEFAULT_PROGRAMS) {
+                        await setDoc(doc(db, 'programs', p.id), p);
+                    }
+                }
+            } catch (err) {
+                console.error('Gagal seeding data awal ke Firestore:', err);
+            }
+
+            // Seed rekening bank default HANYA jika koleksi 'bankAccounts' masih kosong
+            try {
+                const bankSnap = await getDocs(collection(db, 'bankAccounts'));
+                if (bankSnap.empty) {
+                    for (const b of state.bankAccounts) {
+                        await setDoc(doc(db, 'bankAccounts', b.id), b);
+                    }
+                }
+            } catch (err) {
+                console.error('Gagal seeding rekening bank awal ke Firestore:', err);
+            }
+
+            // Listener Realtime: Programs
+            onSnapshot(collection(db, 'programs'), (snap) => {
+                state.programs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                renderAllData();
+            }, (err) => console.error('Listener programs error:', err));
+
+            // Listener Realtime: Donasi
+            onSnapshot(query(collection(db, 'donations'), orderBy('createdAt', 'desc')), (snap) => {
+                state.donations = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                renderAllData();
+            }, (err) => {
+                console.error('Listener donations error:', err);
+                // fallback tanpa orderBy jika field createdAt belum ada di sebagian dokumen lama
+                onSnapshot(collection(db, 'donations'), (snap) => {
+                    state.donations = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    renderAllData();
+                });
+            });
+
+            // Listener Realtime: Pengeluaran
+            onSnapshot(collection(db, 'expenses'), (snap) => {
+                state.expenses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                renderAllData();
+            }, (err) => console.error('Listener expenses error:', err));
+
+            // Listener Realtime: Relawan
+            onSnapshot(collection(db, 'volunteers'), (snap) => {
+                state.volunteers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                refreshAllStats();
+            }, (err) => console.error('Listener volunteers error:', err));
+
+            // Listener Realtime: Rekening Bank
+            onSnapshot(collection(db, 'bankAccounts'), (snap) => {
+                state.bankAccounts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                renderAdminBankAccounts();
+                renderDonorBankAccounts();
+            }, (err) => console.error('Listener bankAccounts error:', err));
+        }
 
         function switchTab(viewId) {
             // Proteksi Admin Dashboard dengan password
@@ -1371,6 +1762,7 @@
                 'success': 'Donasi Berhasil',
                 'reports': 'Transparansi & Laporan',
                 'volunteer': 'Pendaftaran Relawan',
+                'about': 'Tentang Kami',
                 'admin': 'Admin Dashboard'
             };
             document.getElementById('header-page-title').innerText = titles[viewId] || 'Babussalampeduli';
@@ -1477,6 +1869,29 @@
             switchTab('program');
             document.getElementById('filter-category').value = catId;
             applyProgramFilters();
+        }
+
+        const CATEGORY_DESC = {
+            'MAKAN': 'Distribusi makanan siap santap bagi dhuafa & pekerja jalanan',
+            'SEMBAKO': 'Paket kebutuhan pokok untuk keluarga kurang mampu',
+            'KESEHATAN': 'Layanan pemeriksaan & pengobatan gratis',
+            'PENDIDIKAN': 'Beasiswa & perlengkapan sekolah anak yatim',
+            'AIR_BERSIH': 'Penyediaan akses air bersih untuk daerah terpencil',
+            'LENGKAP': 'Bantuan bencana & program kemanusiaan lainnya'
+        };
+
+        function renderAboutPrograms() {
+            const container = document.getElementById('about-program-list');
+            if (!container) return;
+            container.innerHTML = CATEGORIES.map(c => `
+                <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col items-center text-center space-y-2">
+                    <div class="w-10 h-10 rounded-xl ${c.bg} flex items-center justify-center text-base">
+                        <i class="fa-solid ${c.icon}"></i>
+                    </div>
+                    <span class="text-xs font-bold text-slate-800 leading-tight">${c.name}</span>
+                    <p class="text-[10px] text-slate-500 leading-snug">${CATEGORY_DESC[c.id] || ''}</p>
+                </div>
+            `).join('');
         }
 
         // ============ GALERI FOTO (AUTO SLIDE) ============
@@ -1838,28 +2253,24 @@
                 `;
 
             } else {
+                const activeBanks = state.bankAccounts.filter(b => b.status === 'Aktif');
                 container.innerHTML = `
                     <div class="space-y-2">
                         <span class="px-3 py-1 bg-amber-100 text-amber-800 rounded-full font-bold text-[10px]">TRANSFER BANK MANUAL</span>
                         <h3 class="text-lg font-bold text-slate-900">Rekening Resmi Organisasi</h3>
                     </div>
 
-                    <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left space-y-3 text-xs">
-                        <div class="flex justify-between items-center border-b pb-2">
-                            <div>
-                                <p class="font-bold text-slate-800">Bank Syariah Indonesia (BSI)</p>
-                                <p class="text-slate-500 font-mono">700 888 999 1</p>
+                    <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left space-y-3 text-xs" id="donor-bank-list">
+                        ${activeBanks.map((b, idx) => `
+                            <div class="flex justify-between items-center ${idx < activeBanks.length - 1 ? 'border-b pb-2' : ''}">
+                                <div>
+                                    <p class="font-bold text-slate-800">${b.bankName}</p>
+                                    <p class="text-slate-500 font-mono">${b.accountNumber}</p>
+                                </div>
+                                <button onclick="copyToClipboard('${b.accountNumber.replace(/\s+/g, '')}')" class="px-2.5 py-1 bg-slate-200 text-slate-700 rounded-lg font-bold text-[10px]">Salin</button>
                             </div>
-                            <button onclick="copyToClipboard('7008889991')" class="px-2.5 py-1 bg-slate-200 text-slate-700 rounded-lg font-bold text-[10px]">Salin</button>
-                        </div>
-                        <div class="flex justify-between items-center border-b pb-2">
-                            <div>
-                                <p class="font-bold text-slate-800">Bank Central Asia (BCA)</p>
-                                <p class="text-slate-500 font-mono">883 092 110 0</p>
-                            </div>
-                            <button onclick="copyToClipboard('8830921100')" class="px-2.5 py-1 bg-slate-200 text-slate-700 rounded-lg font-bold text-[10px]">Salin</button>
-                        </div>
-                        <p class="text-[10px] text-slate-400">Atas Nama: <strong>Babussalampeduli</strong></p>
+                        `).join('') || `<p class="text-slate-400 text-center py-2">Belum ada rekening aktif</p>`}
+                        <p class="text-[10px] text-slate-400 pt-1">Atas Nama: <strong>${activeBanks[0] ? activeBanks[0].accountHolder : 'Babussalampeduli'}</strong></p>
                     </div>
 
                     <button onclick="openUploadModal()" class="w-full py-3.5 rounded-2xl bg-emerald-700 text-white font-extrabold text-xs shadow-lg transition flex items-center justify-center gap-2">
@@ -1867,6 +2278,13 @@
                     </button>
                 `;
             }
+        }
+
+        // Refresh tampilan rekening di layar donatur bila sedang ditampilkan (dipanggil saat data bank berubah realtime)
+        function renderDonorBankAccounts() {
+            const el = document.getElementById('donor-bank-list');
+            if (!el) return;
+            renderPaymentInstructionScreen();
         }
 
         function simulatePaymentSuccess() {
@@ -1882,6 +2300,16 @@
 
             state.donations.unshift(tx);
             saveState();
+
+            // Sinkronkan ke Firestore (realtime)
+            const txForDb = { ...tx, createdAt: isFirebaseActive() ? window.fx.serverTimestamp() : Date.now() };
+            dbSet('donations', tx.id, txForDb);
+            if (p) {
+                dbUpdate('programs', p.id, {
+                    collected: isFirebaseActive() ? window.fx.increment(tx.amount) : p.collected,
+                    donorsCount: isFirebaseActive() ? window.fx.increment(1) : p.donorsCount
+                });
+            }
 
             // Populate Success View
             document.getElementById('suc-trx-id').innerText = tx.id;
@@ -1989,6 +2417,16 @@
             return { totalCollected, totalSpent, totalBalance, totalTarget };
         }
 
+        function getMethodBadge(method) {
+            const map = {
+                'QRIS': { icon: 'fa-qrcode', color: 'bg-purple-100 text-purple-700' },
+                'Virtual Account': { icon: 'fa-building-columns', color: 'bg-blue-100 text-blue-700' },
+                'Transfer Bank Manual': { icon: 'fa-money-bill-transfer', color: 'bg-amber-100 text-amber-700' },
+                'Tunai (Cash)': { icon: 'fa-money-bill-wave', color: 'bg-emerald-100 text-emerald-700' }
+            };
+            return map[method] || { icon: 'fa-circle-dollar-to-slot', color: 'bg-slate-100 text-slate-600' };
+        }
+
         function renderReports() {
             const { totalCollected, totalSpent, totalBalance } = getFinancialTotals();
 
@@ -2044,6 +2482,7 @@
             container.innerHTML = state.programs.map(p => {
                 const spent = p.spent || 0;
                 const balance = p.collected - spent;
+                const programDonations = state.donations.filter(d => d.programId === p.id && d.status === 'SUCCESS');
                 return `
                 <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
                     <div class="flex items-center justify-between border-b pb-3">
@@ -2071,6 +2510,30 @@
                     </div>
 
                     <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <p class="text-[11px] font-semibold text-slate-700">Donasi Masuk (QRIS, Tunai, Transfer & VA)</p>
+                            <span class="text-[10px] text-slate-400">${programDonations.length} transaksi</span>
+                        </div>
+                        <div class="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                            ${programDonations.slice(0, 6).map(d => {
+                                const badge = getMethodBadge(d.method);
+                                return `
+                                <div class="flex items-center justify-between gap-2 text-[10px] bg-slate-50 p-2 rounded-lg">
+                                    <div class="flex items-center gap-2 min-w-0">
+                                        <span class="w-6 h-6 rounded-full ${badge.color} flex items-center justify-center shrink-0"><i class="fa-solid ${badge.icon}"></i></span>
+                                        <div class="min-w-0">
+                                            <p class="font-semibold text-slate-700 truncate">${d.donorName}</p>
+                                            <p class="text-slate-400 truncate">${d.method} • ${d.date}</p>
+                                        </div>
+                                    </div>
+                                    <span class="font-bold text-emerald-700 shrink-0">${formatRp(d.amount)}</span>
+                                </div>
+                            `}).join('') || `<p class="text-[10px] text-slate-400 text-center py-2">Belum ada donasi masuk untuk program ini</p>`}
+                            ${programDonations.length > 6 ? `<p class="text-[10px] text-slate-400 text-center pt-1">+${programDonations.length - 6} donasi lainnya</p>` : ''}
+                        </div>
+                    </div>
+
+                    <div class="space-y-2">
                         <p class="text-[11px] font-semibold text-slate-700">Rincian Penggunaan Dana:</p>
                         ${SPENDING_BREAKDOWN_RATIO.map(r => `
                             <div class="flex items-center justify-between text-[10px]">
@@ -2086,6 +2549,10 @@
                             <p class="mt-0.5">Penerima manfaat: <strong>${p.beneficiariesCount}</strong>. Seluruh penyaluran telah terverifikasi oleh tim pengawas dan audit lapangan secara terbuka.</p>
                         </div>
                     </div>
+
+                    <button onclick="downloadSingleProgramPDF('${p.id}')" class="w-full py-2.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 font-bold text-xs transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-file-pdf"></i> Unduh PDF Program Ini
+                    </button>
                 </div>
             `}).join('');
         }
@@ -2125,81 +2592,102 @@
         }
 
         // ============ EXPORT PDF: RINCIAN LAPORAN PER PROGRAM ============
-        function downloadProgramDetailPDF() {
-            try {
-                const { jsPDF } = window.jspdf;
-                const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-                const pageWidth = doc.internal.pageSize.getWidth();
-                const marginX = 40;
-                let y = 50;
+        function buildProgramsPDFDocument(programs, subtitle) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const marginX = 40;
+            let y = 50;
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(16);
+            doc.setTextColor(6, 78, 59);
+            doc.text('BABUSSALAMPEDULI', marginX, y);
+            y += 18;
+            doc.setFontSize(11);
+            doc.setTextColor(71, 85, 105);
+            doc.setFont('helvetica', 'normal');
+            doc.text(subtitle, marginX, y);
+            y += 14;
+            doc.setFontSize(9);
+            doc.text('Dicetak: ' + new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }), marginX, y);
+            y += 20;
+            doc.setDrawColor(203, 213, 225);
+            doc.line(marginX, y, pageWidth - marginX, y);
+            y += 22;
+
+            programs.forEach((p, idx) => {
+                const spent = p.spent || 0;
+                const balance = p.collected - spent;
+
+                // Estimasi tinggi blok, pindah halaman bila tidak cukup ruang
+                const blockHeight = 150;
+                if (y + blockHeight > doc.internal.pageSize.getHeight() - 40) {
+                    doc.addPage();
+                    y = 50;
+                }
 
                 doc.setFont('helvetica', 'bold');
-                doc.setFontSize(16);
-                doc.setTextColor(6, 78, 59);
-                doc.text('BABUSSALAMPEDULI', marginX, y);
-                y += 18;
                 doc.setFontSize(11);
-                doc.setTextColor(71, 85, 105);
+                doc.setTextColor(15, 23, 42);
+                doc.text(`${idx + 1}. ${p.title}`, marginX, y);
+                y += 15;
+
                 doc.setFont('helvetica', 'normal');
-                doc.text('Rincian Laporan Keuangan per Program', marginX, y);
-                y += 14;
                 doc.setFontSize(9);
-                doc.text('Dicetak: ' + new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }), marginX, y);
-                y += 20;
-                doc.setDrawColor(203, 213, 225);
-                doc.line(marginX, y, pageWidth - marginX, y);
-                y += 22;
+                doc.setTextColor(100, 116, 139);
+                doc.text(`Kategori: ${p.category}   |   Lokasi: ${p.location}   |   Status: ${p.status}`, marginX, y);
+                y += 16;
 
-                state.programs.forEach((p, idx) => {
-                    const spent = p.spent || 0;
-                    const balance = p.collected - spent;
+                doc.setTextColor(30, 41, 59);
+                doc.text(`Target Dana        : ${formatRp(p.target)}`, marginX, y); y += 13;
+                doc.text(`Dana Terkumpul     : ${formatRp(p.collected)}`, marginX, y); y += 13;
+                doc.text(`Dana Tersalurkan   : ${formatRp(spent)}`, marginX, y); y += 13;
+                doc.text(`Saldo Kas          : ${formatRp(balance)}`, marginX, y); y += 13;
+                doc.text(`Jumlah Donatur     : ${p.donorsCount} orang`, marginX, y); y += 13;
+                doc.text(`Penerima Manfaat   : ${p.beneficiariesCount}`, marginX, y); y += 16;
 
-                    // Estimasi tinggi blok, pindah halaman bila tidak cukup ruang
-                    const blockHeight = 150;
-                    if (y + blockHeight > doc.internal.pageSize.getHeight() - 40) {
-                        doc.addPage();
-                        y = 50;
-                    }
-
-                    doc.setFont('helvetica', 'bold');
-                    doc.setFontSize(11);
-                    doc.setTextColor(15, 23, 42);
-                    doc.text(`${idx + 1}. ${p.title}`, marginX, y);
-                    y += 15;
-
-                    doc.setFont('helvetica', 'normal');
-                    doc.setFontSize(9);
-                    doc.setTextColor(100, 116, 139);
-                    doc.text(`Kategori: ${p.category}   |   Lokasi: ${p.location}   |   Status: ${p.status}`, marginX, y);
-                    y += 16;
-
-                    doc.setTextColor(30, 41, 59);
-                    doc.text(`Target Dana        : ${formatRp(p.target)}`, marginX, y); y += 13;
-                    doc.text(`Dana Terkumpul     : ${formatRp(p.collected)}`, marginX, y); y += 13;
-                    doc.text(`Dana Tersalurkan   : ${formatRp(spent)}`, marginX, y); y += 13;
-                    doc.text(`Saldo Kas          : ${formatRp(balance)}`, marginX, y); y += 13;
-                    doc.text(`Jumlah Donatur     : ${p.donorsCount} orang`, marginX, y); y += 13;
-                    doc.text(`Penerima Manfaat   : ${p.beneficiariesCount}`, marginX, y); y += 16;
-
-                    doc.setFont('helvetica', 'bold');
-                    doc.setFontSize(9);
-                    doc.text('Rincian Penggunaan Dana:', marginX, y);
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(9);
+                doc.text('Rincian Penggunaan Dana:', marginX, y);
+                y += 13;
+                doc.setFont('helvetica', 'normal');
+                SPENDING_BREAKDOWN_RATIO.forEach(r => {
+                    doc.text(`• ${r.label}: ${formatRp(Math.round(spent * r.pct))} (${Math.round(r.pct * 100)}%)`, marginX + 10, y);
                     y += 13;
-                    doc.setFont('helvetica', 'normal');
-                    SPENDING_BREAKDOWN_RATIO.forEach(r => {
-                        doc.text(`• ${r.label}: ${formatRp(Math.round(spent * r.pct))} (${Math.round(r.pct * 100)}%)`, marginX + 10, y);
-                        y += 13;
-                    });
-
-                    y += 6;
-                    doc.setDrawColor(226, 232, 240);
-                    doc.line(marginX, y, pageWidth - marginX, y);
-                    y += 22;
                 });
 
+                y += 6;
+                doc.setDrawColor(226, 232, 240);
+                doc.line(marginX, y, pageWidth - marginX, y);
+                y += 22;
+            });
+
+            return doc;
+        }
+
+        // PDF untuk SELURUH PROGRAM sekaligus
+        function downloadProgramDetailPDF() {
+            try {
+                const doc = buildProgramsPDFDocument(state.programs, 'Rincian Laporan Keuangan Seluruh Program');
                 const ymd = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-                doc.save(`Rincian-Laporan-Program-Babussalampeduli-${ymd}.pdf`);
-                showToast('Rincian laporan (PDF) berhasil diunduh');
+                doc.save(`Rincian-Laporan-Semua-Program-Babussalampeduli-${ymd}.pdf`);
+                showToast('Rincian laporan semua program (PDF) berhasil diunduh');
+            } catch (err) {
+                showToast('Gagal membuat file PDF, coba lagi', 'info');
+            }
+        }
+
+        // PDF untuk SATU PROGRAM saja
+        function downloadSingleProgramPDF(programId) {
+            const p = state.programs.find(x => x.id === programId);
+            if (!p) return;
+            try {
+                const doc = buildProgramsPDFDocument([p], 'Rincian Laporan Keuangan Program');
+                const ymd = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+                const safeName = p.title.replace(/[^a-zA-Z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 50);
+                doc.save(`Laporan-${safeName}-${ymd}.pdf`);
+                showToast(`Laporan program "${p.title}" (PDF) berhasil diunduh`);
             } catch (err) {
                 showToast('Gagal membuat file PDF, coba lagi', 'info');
             }
@@ -2207,9 +2695,50 @@
 
         function handleVolunteerSubmit(e) {
             e.preventDefault();
+            const newVolunteer = {
+                id: 'VOL-' + Date.now().toString().slice(-9),
+                name: document.getElementById('vol-name').value,
+                phone: document.getElementById('vol-phone').value,
+                city: document.getElementById('vol-city').value,
+                field: document.getElementById('vol-field').value,
+                availability: document.getElementById('vol-availability').value || '-',
+                date: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+            };
+            state.volunteers.push(newVolunteer);
+            saveState();
+            dbSet('volunteers', newVolunteer.id, { ...newVolunteer, createdAt: isFirebaseActive() ? window.fx.serverTimestamp() : Date.now() });
             showToast('Pendaftaran relawan berhasil dikirim! Tim kami akan menghubungi via WA.');
             e.target.reset();
             switchTab('home');
+        }
+
+        // ============ STATISTIK REAL (DIHITUNG DARI DATA AKTUAL) ============
+        function refreshAllStats() {
+            const { totalCollected, totalSpent } = getFinancialTotals();
+            const successDonations = state.donations.filter(d => d.status === 'SUCCESS');
+            const pendingDonations = state.donations.filter(d => d.status !== 'SUCCESS');
+            const activeProgramsCount = state.programs.filter(p => p.status === 'AKTIF').length;
+            const totalBeneficiaries = state.programs.reduce((sum, p) => sum + (parseInt(String(p.beneficiariesCount).replace(/[^0-9]/g, '')) || 0), 0);
+
+            // Statistik Beranda (Publik)
+            const elTotalDonations = document.getElementById('stat-total-donations');
+            if (elTotalDonations) elTotalDonations.innerText = formatRp(totalSpent);
+            const elDonorsCount = document.getElementById('stat-donors-count');
+            if (elDonorsCount) elDonorsCount.innerText = successDonations.length.toLocaleString('id-ID');
+            const elActivePrograms = document.getElementById('stat-active-programs');
+            if (elActivePrograms) elActivePrograms.innerText = activeProgramsCount;
+            const elBeneficiaries = document.getElementById('stat-beneficiaries');
+            if (elBeneficiaries) elBeneficiaries.innerText = totalBeneficiaries.toLocaleString('id-ID');
+
+            // Statistik Admin Dashboard
+            const elAdmTotal = document.getElementById('adm-stat-total');
+            if (elAdmTotal) elAdmTotal.innerText = formatRp(totalCollected);
+            const elAdmPending = document.getElementById('adm-stat-pending');
+            if (elAdmPending) elAdmPending.innerText = pendingDonations.length + ' Transaksi';
+            const elAdmPrograms = document.getElementById('adm-stat-programs');
+            if (elAdmPrograms) elAdmPrograms.innerText = activeProgramsCount + ' Program';
+            const elAdmVolunteers = document.getElementById('adm-stat-volunteers');
+            if (elAdmVolunteers) elAdmVolunteers.innerText = state.volunteers.length + ' Orang';
         }
 
         function renderAdminTable() {
@@ -2250,6 +2779,10 @@
                 const p = state.programs.find(x => x.id === tx.programId);
                 if (p) p.collected += tx.amount;
                 saveState();
+
+                dbUpdate('donations', txId, { status: 'SUCCESS' });
+                if (p) dbUpdate('programs', p.id, { collected: isFirebaseActive() ? window.fx.increment(tx.amount) : p.collected });
+
                 renderAdminTable();
                 renderHomePrograms();
                 renderAllPrograms();
@@ -2298,14 +2831,19 @@
             const amount = parseInt(document.getElementById('tx-amount').value);
             const method = document.getElementById('tx-method').value;
             const status = document.getElementById('tx-status').value;
+            const fbOn = isFirebaseActive();
 
             if (editId) {
                 // Mode Ubah: lepaskan dulu efek lama ke program sebelumnya, lalu terapkan efek baru
                 const tx = state.donations.find(t => t.id === editId);
                 if (tx) {
-                    if (tx.status === 'SUCCESS') {
-                        const oldProgram = state.programs.find(p => p.id === tx.programId);
-                        if (oldProgram) oldProgram.collected = Math.max(0, oldProgram.collected - tx.amount);
+                    const oldProgramId = tx.programId;
+                    const oldAmount = tx.amount;
+                    const wasSuccess = tx.status === 'SUCCESS';
+
+                    if (wasSuccess) {
+                        const oldProgram = state.programs.find(p => p.id === oldProgramId);
+                        if (oldProgram) oldProgram.collected = Math.max(0, oldProgram.collected - oldAmount);
                     }
                     tx.programId = programId;
                     tx.programTitle = program ? program.title : tx.programTitle;
@@ -2315,6 +2853,14 @@
                     tx.status = status;
                     if (status === 'SUCCESS' && program) {
                         program.collected += amount;
+                    }
+
+                    dbUpdate('donations', editId, { programId, programTitle: tx.programTitle, donorName, amount, method, status });
+                    if (wasSuccess) {
+                        dbUpdate('programs', oldProgramId, { collected: fbOn ? window.fx.increment(-oldAmount) : undefined });
+                    }
+                    if (status === 'SUCCESS' && program) {
+                        dbUpdate('programs', programId, { collected: fbOn ? window.fx.increment(amount) : undefined });
                     }
                 }
                 showToast('Transaksi berhasil diperbarui');
@@ -2332,6 +2878,11 @@
                 };
                 state.donations.unshift(newTx);
                 if (status === 'SUCCESS' && program) program.collected += amount;
+
+                dbSet('donations', newTx.id, { ...newTx, createdAt: fbOn ? window.fx.serverTimestamp() : Date.now() });
+                if (status === 'SUCCESS' && program) {
+                    dbUpdate('programs', programId, { collected: fbOn ? window.fx.increment(amount) : undefined });
+                }
                 showToast('Transaksi baru berhasil ditambahkan');
             }
 
@@ -2348,11 +2899,16 @@
         function deleteTx(txId) {
             if (!confirm('Yakin ingin menghapus transaksi ini? Nominal yang sudah tercatat pada program akan disesuaikan kembali.')) return;
             const tx = state.donations.find(t => t.id === txId);
+            const fbOn = isFirebaseActive();
             if (tx && tx.status === 'SUCCESS') {
                 const p = state.programs.find(p => p.id === tx.programId);
-                if (p) p.collected = Math.max(0, p.collected - tx.amount);
+                if (p) {
+                    p.collected = Math.max(0, p.collected - tx.amount);
+                    dbUpdate('programs', p.id, { collected: fbOn ? window.fx.increment(-tx.amount) : p.collected });
+                }
             }
             state.donations = state.donations.filter(t => t.id !== txId);
+            dbDelete('donations', txId);
             saveState();
             renderAdminTable();
             renderHomePrograms();
@@ -2442,13 +2998,16 @@
             const category = document.getElementById('exp-category').value;
             const rawDate = document.getElementById('exp-date').value;
             const formattedDate = new Date(rawDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+            const fbOn = isFirebaseActive();
 
             if (editId) {
                 // Mode Ubah: lepaskan efek lama ke program sebelumnya, lalu terapkan efek baru
                 const x = state.expenses.find(e => e.id === editId);
                 if (x) {
-                    const oldProgram = state.programs.find(p => p.id === x.programId);
-                    if (oldProgram) oldProgram.spent = Math.max(0, (oldProgram.spent || 0) - x.amount);
+                    const oldProgramId = x.programId;
+                    const oldAmount = x.amount;
+                    const oldProgram = state.programs.find(p => p.id === oldProgramId);
+                    if (oldProgram) oldProgram.spent = Math.max(0, (oldProgram.spent || 0) - oldAmount);
 
                     x.programId = programId;
                     x.programTitle = program ? program.title : x.programTitle;
@@ -2459,6 +3018,10 @@
                     x.rawDate = rawDate;
 
                     if (program) program.spent = (program.spent || 0) + amount;
+
+                    dbUpdate('expenses', editId, { programId, programTitle: x.programTitle, description, amount, category, date: formattedDate, rawDate });
+                    if (oldProgram) dbUpdate('programs', oldProgramId, { spent: fbOn ? window.fx.increment(-oldAmount) : undefined });
+                    if (program) dbUpdate('programs', programId, { spent: fbOn ? window.fx.increment(amount) : undefined });
                 }
                 showToast('Pengeluaran berhasil diperbarui');
             } else {
@@ -2475,6 +3038,9 @@
                 };
                 state.expenses.unshift(newExp);
                 if (program) program.spent = (program.spent || 0) + amount;
+
+                dbSet('expenses', newExp.id, { ...newExp, createdAt: fbOn ? window.fx.serverTimestamp() : Date.now() });
+                if (program) dbUpdate('programs', programId, { spent: fbOn ? window.fx.increment(amount) : undefined });
                 showToast('Pengeluaran baru berhasil dicatat');
             }
 
@@ -2489,17 +3055,111 @@
         function deleteExpense(expId) {
             if (!confirm('Yakin ingin menghapus catatan pengeluaran ini? Saldo program akan disesuaikan kembali.')) return;
             const x = state.expenses.find(e => e.id === expId);
+            const fbOn = isFirebaseActive();
             if (x) {
                 const p = state.programs.find(p => p.id === x.programId);
-                if (p) p.spent = Math.max(0, (p.spent || 0) - x.amount);
+                if (p) {
+                    p.spent = Math.max(0, (p.spent || 0) - x.amount);
+                    dbUpdate('programs', p.id, { spent: fbOn ? window.fx.increment(-x.amount) : p.spent });
+                }
             }
             state.expenses = state.expenses.filter(e => e.id !== expId);
+            dbDelete('expenses', expId);
             saveState();
             renderAdminExpenseTable();
             renderAdminCampaigns();
             renderAdminFinance();
             renderReports();
             showToast('Pengeluaran berhasil dihapus');
+        }
+
+        // ============ ADMIN: KELOLA REKENING BANK RESMI ============
+        function renderAdminBankAccounts() {
+            const container = document.getElementById('admin-bank-list');
+            if (!container) return;
+            container.innerHTML = state.bankAccounts.map((b, idx) => `
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-2 ${idx < state.bankAccounts.length - 1 ? 'border-b' : ''}">
+                    <div>
+                        <span><strong>${b.bankName}</strong> - ${b.accountNumber} (a.n. ${b.accountHolder})</span>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${b.status === 'Aktif' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}">${b.status}</span>
+                        <button onclick="openBankModal('${b.id}')" title="Ubah Rekening" class="w-7 h-7 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-[10px]">
+                            <i class="fa-solid fa-pen"></i>
+                        </button>
+                        <button onclick="deleteBank('${b.id}')" title="Hapus Rekening" class="w-7 h-7 rounded bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center text-[10px]">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('') || `<p class="text-center text-slate-400 py-4">Belum ada rekening bank ditambahkan.</p>`;
+        }
+
+        function openBankModal(bankId) {
+            if (bankId) {
+                const b = state.bankAccounts.find(x => x.id === bankId);
+                if (!b) return;
+                document.getElementById('bank-edit-id').value = b.id;
+                document.getElementById('bank-name').value = b.bankName;
+                document.getElementById('bank-number').value = b.accountNumber;
+                document.getElementById('bank-holder').value = b.accountHolder;
+                document.getElementById('bank-status').value = b.status;
+                document.getElementById('modal-bank-title').innerText = 'Ubah Rekening Bank';
+                document.getElementById('bank-modal-submit-btn').innerText = 'Simpan Perubahan';
+            } else {
+                document.getElementById('modal-bank').querySelector('form').reset();
+                document.getElementById('bank-edit-id').value = '';
+                document.getElementById('bank-holder').value = 'Babussalampeduli';
+                document.getElementById('modal-bank-title').innerText = 'Tambah Rekening Bank';
+                document.getElementById('bank-modal-submit-btn').innerText = 'Simpan Rekening';
+            }
+            document.getElementById('modal-bank').classList.remove('hidden');
+        }
+
+        function closeBankModal() {
+            document.getElementById('modal-bank').classList.add('hidden');
+        }
+
+        function handleSaveBank(e) {
+            e.preventDefault();
+            const editId = document.getElementById('bank-edit-id').value;
+            const bankName = document.getElementById('bank-name').value;
+            const accountNumber = document.getElementById('bank-number').value;
+            const accountHolder = document.getElementById('bank-holder').value;
+            const status = document.getElementById('bank-status').value;
+
+            if (editId) {
+                const b = state.bankAccounts.find(x => x.id === editId);
+                if (b) {
+                    b.bankName = bankName;
+                    b.accountNumber = accountNumber;
+                    b.accountHolder = accountHolder;
+                    b.status = status;
+                    dbUpdate('bankAccounts', editId, { bankName, accountNumber, accountHolder, status });
+                }
+                showToast('Rekening bank berhasil diperbarui');
+            } else {
+                const newBank = {
+                    id: 'BANK-' + Date.now().toString().slice(-9),
+                    bankName, accountNumber, accountHolder, status
+                };
+                state.bankAccounts.push(newBank);
+                dbSet('bankAccounts', newBank.id, newBank);
+                showToast('Rekening bank berhasil ditambahkan');
+            }
+
+            renderAdminBankAccounts();
+            renderDonorBankAccounts();
+            closeBankModal();
+        }
+
+        function deleteBank(bankId) {
+            if (!confirm('Yakin ingin menghapus rekening bank ini?')) return;
+            state.bankAccounts = state.bankAccounts.filter(b => b.id !== bankId);
+            dbDelete('bankAccounts', bankId);
+            renderAdminBankAccounts();
+            renderDonorBankAccounts();
+            showToast('Rekening bank berhasil dihapus');
         }
 
         const ADMIN_TABS = ['campaigns', 'tx', 'finance', 'menu', 'settings'];
@@ -2574,6 +3234,7 @@
             if (!p) return;
             p.status = p.status === 'AKTIF' ? 'SELESAI' : 'AKTIF';
             saveState();
+            dbUpdate('programs', id, { status: p.status });
             renderAdminCampaigns();
             renderAllPrograms();
             renderHomePrograms();
@@ -2584,6 +3245,7 @@
             if (!confirm('Yakin ingin menghapus program ini? Tindakan ini tidak dapat dibatalkan.')) return;
             state.programs = state.programs.filter(x => x.id !== id);
             saveState();
+            dbDelete('programs', id);
             renderAdminCampaigns();
             renderAllPrograms();
             renderHomePrograms();
@@ -2718,6 +3380,11 @@
                     p.beneficiariesCount = document.getElementById('prog-new-ben').value;
                     p.image = document.getElementById('prog-new-img').value || p.image;
                     p.description = document.getElementById('prog-new-desc').value;
+
+                    dbUpdate('programs', editId, {
+                        title: p.title, category: p.category, target: p.target, location: p.location,
+                        beneficiariesCount: p.beneficiariesCount, image: p.image, description: p.description
+                    });
                 }
                 showToast('Perubahan program berhasil disimpan!');
             } else {
@@ -2740,6 +3407,7 @@
                     balance: 0
                 };
                 state.programs.unshift(newP);
+                dbSet('programs', newP.id, newP);
                 showToast('Program sosial berhasil diterbitkan!');
             }
 
@@ -2766,6 +3434,7 @@
         function saveState() {
             // Data disimpan di memori selama sesi berjalan (tidak menggunakan localStorage
             // karena tidak didukung pada lingkungan artifact). Data akan reset saat halaman dimuat ulang.
+            refreshAllStats();
         }
     </script>
 </body>
