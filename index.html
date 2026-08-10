@@ -343,7 +343,7 @@
                     </div>
 
                     <!-- Call To Action: Hubungi via WhatsApp -->
-                    <a href="https://wa.me/6281316426495?text=Assalamualaikum%2C%20saya%20ingin%20bertanya%20tentang%20program%20donasi%20di%20Aksi%20Sosial"
+                    <a href="https://wa.me/6281316426495?text=Assalamualaikum%2C%20saya%20ingin%20bertanya%20tentang%20program%20donasi%20di%20Babussalampeduli"
                        target="_blank" rel="noopener"
                        class="flex items-center gap-4 bg-gradient-to-r from-emerald-700 to-emerald-800 rounded-2xl p-4 sm:p-5 shadow-lg shadow-emerald-800/20 hover:opacity-95 active:scale-[0.99] transition group">
                         <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white/15 flex items-center justify-center text-white text-2xl sm:text-3xl shrink-0 group-hover:scale-105 transition">
@@ -511,7 +511,7 @@
                                     </div>
                                     <div>
                                         <label class="block text-xs font-semibold text-slate-700 mb-1">Nomor WhatsApp *</label>
-                                        <input type="tel" id="don-input-phone" value="081316426495" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none">
+                                        <input type="tel" id="don-input-phone" value="6281316426495" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none">
                                     </div>
                                 </div>
 
@@ -993,6 +993,9 @@
                             <button onclick="switchAdminTab('campaigns')" id="atab-campaigns" class="shrink-0 px-5 py-3 text-xs font-bold border-b-2 border-emerald-600 text-emerald-800 bg-white flex items-center gap-1.5">
                                 <i class="fa-solid fa-bullhorn"></i> Kampanye Donasi
                             </button>
+                            <button onclick="switchAdminTab('gallery')" id="atab-gallery" class="shrink-0 px-5 py-3 text-xs font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1.5">
+                                <i class="fa-solid fa-images"></i> Galeri Kegiatan
+                            </button>
                             <button onclick="switchAdminTab('tx')" id="atab-tx" class="shrink-0 px-5 py-3 text-xs font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1.5">
                                 <i class="fa-solid fa-money-check-dollar"></i> Transaksi & Verifikasi
                             </button>
@@ -1016,6 +1019,19 @@
                                 </button>
                             </div>
                             <div id="admin-campaign-list" class="space-y-3">
+                                <!-- Rendered dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Admin Tab: Galeri Kegiatan -->
+                        <div id="admin-sec-gallery" class="p-4 sm:p-5 space-y-4 hidden">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <p class="text-xs text-slate-500">Kelola foto slide galeri kegiatan yang tampil di Beranda</p>
+                                <button onclick="openGalleryModal()" class="px-4 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-md transition flex items-center gap-2 shrink-0">
+                                    <i class="fa-solid fa-plus"></i> Tambah Foto
+                                </button>
+                            </div>
+                            <div id="admin-gallery-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                 <!-- Rendered dynamically -->
                             </div>
                         </div>
@@ -1504,6 +1520,40 @@
         </div>
     </div>
 
+    <!-- MODAL: TAMBAH / EDIT FOTO GALERI (ADMIN) -->
+    <div id="modal-gallery" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <button onclick="closeGalleryModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-700">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+
+            <h4 class="text-base font-bold text-slate-900" id="modal-gallery-title">Tambah Foto Galeri</h4>
+
+            <form onsubmit="handleSaveGalleryItem(event)" class="space-y-3 text-xs">
+                <input type="hidden" id="gal-edit-id" value="">
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Foto Kegiatan</label>
+                    <input type="file" id="gal-file-input" accept="image/*" onchange="handleGalleryFilePreview(event)" class="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100">
+                    <p class="text-[10px] text-slate-400 mt-1">Atau tempel URL foto di bawah ini (opsional jika sudah unggah foto):</p>
+                    <input type="url" id="gal-url-input" placeholder="https://..." class="w-full mt-1.5 p-2.5 bg-slate-50 border rounded-xl font-medium outline-none">
+                    <img id="gal-preview-img" class="hidden mt-2 w-full h-40 object-cover rounded-xl border border-slate-200 bg-slate-50">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Caption / Keterangan Foto</label>
+                    <input type="text" id="gal-caption" required placeholder="Penyaluran makan gratis untuk dhuafa" class="w-full p-2.5 bg-slate-50 border rounded-xl font-medium outline-none">
+                </div>
+
+                <p id="gal-error" class="hidden text-[11px] text-rose-600 font-semibold">
+                    <i class="fa-solid fa-circle-exclamation"></i> <span id="gal-error-text"></span>
+                </p>
+
+                <button type="submit" id="gal-modal-submit-btn" class="w-full py-3 rounded-2xl bg-emerald-700 text-white font-bold text-xs shadow-lg">
+                    Simpan Foto
+                </button>
+            </form>
+        </div>
+    </div>
+
     <!-- MODAL: TAMBAH / EDIT REKENING BANK (ADMIN) -->
     <div id="modal-bank" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl relative max-h-[90vh] overflow-y-auto">
@@ -1631,6 +1681,14 @@
             { id: 'LENGKAP', name: 'Program Lain', icon: 'fa-hands-holding-circle', bg: 'bg-purple-100 text-purple-800' }
         ];
 
+        const DEFAULT_GALLERY = [
+            { id: 'GAL-001', url: 'https://images.unsplash.com/photo-1593113598332-cd288d649433?q=80&w=900&auto=format&fit=crop', caption: 'Penyaluran makan gratis untuk dhuafa' },
+            { id: 'GAL-002', url: 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?q=80&w=900&auto=format&fit=crop', caption: 'Distribusi sembako ke warga terdampak' },
+            { id: 'GAL-003', url: 'https://images.unsplash.com/photo-1509099836639-18ba1795216d?q=80&w=900&auto=format&fit=crop', caption: 'Pemeriksaan kesehatan gratis' },
+            { id: 'GAL-004', url: 'https://images.unsplash.com/photo-1497486751825-1233686d5d80?q=80&w=900&auto=format&fit=crop', caption: 'Bantuan pendidikan untuk anak yatim' },
+            { id: 'GAL-005', url: 'https://images.unsplash.com/photo-1541199249251-f713e6145474?q=80&w=900&auto=format&fit=crop', caption: 'Pembangunan sumur air bersih' }
+        ];
+
         let state = {
             programs: DEFAULT_PROGRAMS,
             donations: [],
@@ -1639,7 +1697,7 @@
                 nominal: 100000,
                 name: 'Ahmad Rizky',
                 email: 'ahmad.rizky@gmail.com',
-                phone: '081316426495',
+                phone: '6281316426495',
                 isAnonymous: false,
                 message: '',
                 method: 'QRIS'
@@ -1652,6 +1710,7 @@
                 { id: 'BANK-002', bankName: 'Bank Central Asia (BCA)', accountNumber: '883 092 110 0', accountHolder: 'Babussalampeduli', status: 'Aktif' },
                 { id: 'BANK-003', bankName: 'Bank Mandiri', accountNumber: '122 000 981 771', accountHolder: 'Babussalampeduli', status: 'Aktif' }
             ],
+            gallery: [...DEFAULT_GALLERY],
             isAdminAuthenticated: false,
             menu: [
                 { key: 'home', label: 'Beranda', desc: 'Halaman utama aplikasi', icon: 'fa-house', visible: true },
@@ -1683,6 +1742,7 @@
             renderAboutPrograms();
             renderAdminBankAccounts();
             renderDonorBankAccounts();
+            renderAdminGallery();
             applyMenuVisibility();
             refreshAllStats();
         }
@@ -1795,6 +1855,18 @@
                 console.error('Gagal seeding rekening bank awal ke Firestore:', err);
             }
 
+            // Seed galeri kegiatan default HANYA jika koleksi 'gallery' masih kosong
+            try {
+                const gallerySnap = await getDocs(collection(db, 'gallery'));
+                if (gallerySnap.empty) {
+                    for (const g of DEFAULT_GALLERY) {
+                        await setDoc(doc(db, 'gallery', g.id), g);
+                    }
+                }
+            } catch (err) {
+                console.error('Gagal seeding galeri awal ke Firestore:', err);
+            }
+
             // Listener Realtime: Programs
             onSnapshot(collection(db, 'programs'), (snap) => {
                 state.programs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -1832,6 +1904,13 @@
                 renderAdminBankAccounts();
                 renderDonorBankAccounts();
             }, (err) => console.error('Listener bankAccounts error:', err));
+
+            // Listener Realtime: Galeri Kegiatan
+            onSnapshot(collection(db, 'gallery'), (snap) => {
+                state.gallery = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                renderAdminGallery();
+                initGallery();
+            }, (err) => console.error('Listener gallery error:', err));
         }
 
         function switchTab(viewId) {
@@ -1988,13 +2067,6 @@
         }
 
         // ============ GALERI FOTO (AUTO SLIDE) ============
-        const GALLERY_IMAGES = [
-            { url: 'https://images.unsplash.com/photo-1593113598332-cd288d649433?q=80&w=900&auto=format&fit=crop', caption: 'Penyaluran makan gratis untuk dhuafa' },
-            { url: 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?q=80&w=900&auto=format&fit=crop', caption: 'Distribusi sembako ke warga terdampak' },
-            { url: 'https://images.unsplash.com/photo-1509099836639-18ba1795216d?q=80&w=900&auto=format&fit=crop', caption: 'Pemeriksaan kesehatan gratis' },
-            { url: 'https://images.unsplash.com/photo-1497486751825-1233686d5d80?q=80&w=900&auto=format&fit=crop', caption: 'Bantuan pendidikan untuk anak yatim' },
-            { url: 'https://images.unsplash.com/photo-1541199249251-f713e6145474?q=80&w=900&auto=format&fit=crop', caption: 'Pembangunan sumur air bersih' }
-        ];
         let galleryIndex = 0;
         let galleryTimer = null;
 
@@ -2002,8 +2074,9 @@
             const track = document.getElementById('gallery-track');
             const dots = document.getElementById('gallery-dots');
             if (!track || !dots) return;
+            const images = state.gallery && state.gallery.length ? state.gallery : DEFAULT_GALLERY;
 
-            track.innerHTML = GALLERY_IMAGES.map(img => `
+            track.innerHTML = images.map(img => `
                 <div class="relative w-full h-full shrink-0">
                     <img src="${img.url}" alt="${img.caption}" class="w-full h-full object-cover">
                     <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-900/85 to-transparent p-3 sm:p-4">
@@ -2012,7 +2085,7 @@
                 </div>
             `).join('');
 
-            dots.innerHTML = GALLERY_IMAGES.map((_, i) => `
+            dots.innerHTML = images.map((_, i) => `
                 <button onclick="gallerySlide(${i}, true)" class="gallery-dot w-1.5 h-1.5 rounded-full transition-all ${i === 0 ? 'bg-white w-4' : 'bg-white/50'}"></button>
             `).join('');
 
@@ -2032,7 +2105,8 @@
         }
 
         function gallerySlide(step, isAbsolute) {
-            const total = GALLERY_IMAGES.length;
+            const images = state.gallery && state.gallery.length ? state.gallery : DEFAULT_GALLERY;
+            const total = images.length;
             galleryIndex = isAbsolute ? step : (galleryIndex + step + total) % total;
             updateGalleryPosition();
             startGalleryAutoplay(); // reset timer setiap kali user berinteraksi
@@ -2041,15 +2115,23 @@
         function startGalleryAutoplay() {
             if (galleryTimer) clearInterval(galleryTimer);
             galleryTimer = setInterval(() => {
-                galleryIndex = (galleryIndex + 1) % GALLERY_IMAGES.length;
+                const images = state.gallery && state.gallery.length ? state.gallery : DEFAULT_GALLERY;
+                galleryIndex = (galleryIndex + 1) % images.length;
                 updateGalleryPosition();
             }, 3500);
         }
 
         function renderHomePrograms() {
             const container = document.getElementById('home-program-cards');
-            const activeProgs = state.programs.slice(0, 2);
-            container.innerHTML = activeProgs.map(p => createProgramCardHtml(p)).join('');
+            if (!container) return;
+            // Hanya program berstatus AKTIF, diurutkan dari yang persentase dananya paling rendah (paling mendesak butuh donasi)
+            const activeProgs = state.programs
+                .filter(p => p.status === 'AKTIF')
+                .sort((a, b) => (a.collected / (a.target || 1)) - (b.collected / (b.target || 1)))
+                .slice(0, 2);
+
+            container.innerHTML = activeProgs.map(p => createProgramCardHtml(p)).join('')
+                || `<p class="col-span-2 text-center text-slate-400 text-xs py-6">Belum ada program aktif saat ini.</p>`;
         }
 
         function renderAllPrograms() {
@@ -3225,7 +3307,147 @@
             showToast('Rekening bank berhasil dihapus');
         }
 
-        const ADMIN_TABS = ['campaigns', 'tx', 'finance', 'menu', 'settings'];
+        // ============ ADMIN: KELOLA GALERI KEGIATAN ============
+        function renderAdminGallery() {
+            const container = document.getElementById('admin-gallery-list');
+            if (!container) return;
+            const images = state.gallery && state.gallery.length ? state.gallery : DEFAULT_GALLERY;
+            container.innerHTML = images.map(g => `
+                <div class="rounded-2xl border border-slate-200 overflow-hidden bg-white">
+                    <img src="${g.url}" alt="${g.caption}" class="w-full h-32 object-cover bg-slate-100">
+                    <div class="p-2.5 space-y-2">
+                        <p class="text-[11px] font-semibold text-slate-700 line-clamp-2">${g.caption}</p>
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="openGalleryModal('${g.id}')" title="Ubah Foto" class="flex-1 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-[10px] font-bold gap-1">
+                                <i class="fa-solid fa-pen"></i> Ubah
+                            </button>
+                            <button onclick="deleteGalleryItem('${g.id}')" title="Hapus Foto" class="flex-1 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center text-[10px] font-bold gap-1">
+                                <i class="fa-solid fa-trash"></i> Hapus
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('') || `<p class="col-span-full text-center text-slate-400 py-8 text-xs">Belum ada foto galeri ditambahkan.</p>`;
+        }
+
+        function handleGalleryFilePreview(e) {
+            const file = e.target.files[0];
+            const img = document.getElementById('gal-preview-img');
+            if (!file) { img.classList.add('hidden'); return; }
+            if (!file.type.startsWith('image/')) {
+                document.getElementById('gal-error-text').innerText = 'File harus berupa foto/gambar.';
+                document.getElementById('gal-error').classList.remove('hidden');
+                e.target.value = '';
+                img.classList.add('hidden');
+                return;
+            }
+            document.getElementById('gal-error').classList.add('hidden');
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                img.src = ev.target.result;
+                img.classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function openGalleryModal(galId) {
+            const form = document.querySelector('#modal-gallery form');
+            form.reset();
+            document.getElementById('gal-preview-img').classList.add('hidden');
+            document.getElementById('gal-error').classList.add('hidden');
+
+            if (galId) {
+                const g = state.gallery.find(x => x.id === galId);
+                if (!g) return;
+                document.getElementById('gal-edit-id').value = g.id;
+                document.getElementById('gal-url-input').value = g.url;
+                document.getElementById('gal-caption').value = g.caption;
+                document.getElementById('gal-preview-img').src = g.url;
+                document.getElementById('gal-preview-img').classList.remove('hidden');
+                document.getElementById('modal-gallery-title').innerText = 'Ubah Foto Galeri';
+                document.getElementById('gal-modal-submit-btn').innerText = 'Simpan Perubahan';
+            } else {
+                document.getElementById('gal-edit-id').value = '';
+                document.getElementById('modal-gallery-title').innerText = 'Tambah Foto Galeri';
+                document.getElementById('gal-modal-submit-btn').innerText = 'Simpan Foto';
+            }
+            document.getElementById('modal-gallery').classList.remove('hidden');
+        }
+
+        function closeGalleryModal() {
+            document.getElementById('modal-gallery').classList.add('hidden');
+        }
+
+        async function handleSaveGalleryItem(e) {
+            e.preventDefault();
+            const editId = document.getElementById('gal-edit-id').value;
+            const caption = document.getElementById('gal-caption').value.trim();
+            const file = document.getElementById('gal-file-input').files[0];
+            const urlInput = document.getElementById('gal-url-input').value.trim();
+            const previewSrc = document.getElementById('gal-preview-img').src;
+
+            let finalUrl = urlInput;
+            const btn = document.getElementById('gal-modal-submit-btn');
+
+            if (file) {
+                if (!file.type.startsWith('image/')) {
+                    document.getElementById('gal-error-text').innerText = 'File harus berupa foto/gambar asli.';
+                    document.getElementById('gal-error').classList.remove('hidden');
+                    return;
+                }
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Memproses foto...';
+                try {
+                    finalUrl = await compressImageToBase64(file, 1000, 0.65);
+                } catch (err) {
+                    document.getElementById('gal-error-text').innerText = 'Gagal memproses foto, coba lagi.';
+                    document.getElementById('gal-error').classList.remove('hidden');
+                    btn.disabled = false;
+                    btn.innerText = editId ? 'Simpan Perubahan' : 'Simpan Foto';
+                    return;
+                }
+            } else if (!finalUrl && editId && previewSrc) {
+                finalUrl = previewSrc;
+            }
+
+            if (!finalUrl) {
+                document.getElementById('gal-error-text').innerText = 'Unggah foto atau isi URL foto terlebih dahulu.';
+                document.getElementById('gal-error').classList.remove('hidden');
+                if (btn.disabled) { btn.disabled = false; btn.innerText = editId ? 'Simpan Perubahan' : 'Simpan Foto'; }
+                return;
+            }
+            document.getElementById('gal-error').classList.add('hidden');
+
+            if (editId) {
+                const g = state.gallery.find(x => x.id === editId);
+                if (g) {
+                    g.url = finalUrl;
+                    g.caption = caption;
+                    dbUpdate('gallery', editId, { url: finalUrl, caption });
+                }
+                showToast('Foto galeri berhasil diperbarui');
+            } else {
+                const newGal = { id: 'GAL-' + Date.now().toString().slice(-9), url: finalUrl, caption };
+                state.gallery.push(newGal);
+                dbSet('gallery', newGal.id, newGal);
+                showToast('Foto galeri berhasil ditambahkan');
+            }
+
+            renderAdminGallery();
+            initGallery();
+            closeGalleryModal();
+        }
+
+        function deleteGalleryItem(galId) {
+            if (!confirm('Yakin ingin menghapus foto galeri ini?')) return;
+            state.gallery = state.gallery.filter(g => g.id !== galId);
+            dbDelete('gallery', galId);
+            renderAdminGallery();
+            initGallery();
+            showToast('Foto galeri berhasil dihapus');
+        }
+
+        const ADMIN_TABS = ['campaigns', 'gallery', 'tx', 'finance', 'menu', 'settings'];
 
         function switchAdminTab(tab) {
             ADMIN_TABS.forEach(t => {
@@ -3236,6 +3458,7 @@
             });
 
             if (tab === 'campaigns') renderAdminCampaigns();
+            if (tab === 'gallery') renderAdminGallery();
             if (tab === 'tx') { switchTxSubTab('in'); renderAdminTable(); renderAdminExpenseTable(); }
             if (tab === 'finance') renderAdminFinance();
             if (tab === 'menu') renderAdminMenuList();
