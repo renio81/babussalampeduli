@@ -967,6 +967,20 @@
                         </button>
                     </div>
 
+                    <!-- Status Sinkronisasi Realtime -->
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <span id="sync-status-dot" class="w-2.5 h-2.5 rounded-full bg-slate-300 shrink-0"></span>
+                            <div>
+                                <p class="text-xs font-bold text-slate-800" id="sync-status-label">Memeriksa koneksi...</p>
+                                <p class="text-[10px] text-slate-400" id="sync-last-time">Belum pernah sinkron</p>
+                            </div>
+                        </div>
+                        <button onclick="manualSyncNow()" id="sync-now-btn" class="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-2 shrink-0">
+                            <i class="fa-solid fa-arrows-rotate" id="sync-now-icon"></i> Sinkronkan Sekarang
+                        </button>
+                    </div>
+
                     <!-- Admin Executive Cards -->
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div class="bg-white p-4 rounded-2xl border border-slate-200">
@@ -1777,6 +1791,84 @@
                 showFirebaseBanner('not-configured');
                 renderAllData();
             }
+            updateSyncStatusUI();
+        }
+
+        // ============ STATUS SINKRONISASI & TOMBOL SYNC MANUAL ============
+        let lastSyncTime = null;
+
+        function markSynced() {
+            lastSyncTime = new Date();
+            updateSyncStatusUI();
+        }
+
+        function updateSyncStatusUI() {
+            const dot = document.getElementById('sync-status-dot');
+            const label = document.getElementById('sync-status-label');
+            const timeEl = document.getElementById('sync-last-time');
+            if (!dot || !label || !timeEl) return;
+
+            if (isFirebaseActive()) {
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0 animate-pulse';
+                label.innerText = 'Realtime Aktif — Terhubung ke Firebase';
+                label.className = 'text-xs font-bold text-emerald-700';
+            } else {
+                const fs = window.firebaseState || {};
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-rose-400 shrink-0';
+                label.innerText = fs.configured ? 'Terputus dari Firebase — mode lokal' : 'Firebase belum dikonfigurasi — mode lokal';
+                label.className = 'text-xs font-bold text-rose-600';
+            }
+
+            timeEl.innerText = lastSyncTime
+                ? 'Sinkron terakhir: ' + lastSyncTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                : 'Belum pernah sinkron';
+        }
+
+        async function manualSyncNow() {
+            const btn = document.getElementById('sync-now-btn');
+            const icon = document.getElementById('sync-now-icon');
+            btn.disabled = true;
+            icon.classList.add('fa-spin');
+
+            try {
+                if (isFirebaseActive()) {
+                    // Sudah realtime — tarik ulang seluruh data terbaru langsung dari Firestore
+                    const { collection, getDocs, query, orderBy } = window.fx;
+                    const db = window.db;
+
+                    const [progSnap, donSnap, expSnap, volSnap, bankSnap, galSnap] = await Promise.all([
+                        getDocs(collection(db, 'programs')),
+                        getDocs(query(collection(db, 'donations'), orderBy('createdAt', 'desc'))).catch(() => getDocs(collection(db, 'donations'))),
+                        getDocs(collection(db, 'expenses')),
+                        getDocs(collection(db, 'volunteers')),
+                        getDocs(collection(db, 'bankAccounts')),
+                        getDocs(collection(db, 'gallery'))
+                    ]);
+
+                    state.programs = progSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    state.donations = donSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    state.expenses = expSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    state.volunteers = volSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    state.bankAccounts = bankSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    state.gallery = galSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                    renderAllData();
+                    initGallery();
+                    markSynced();
+                    showToast('Data berhasil disinkronkan dari Firebase');
+                } else {
+                    // Belum/gagal terhubung — coba sambungkan ulang
+                    bootApp();
+                    showToast('Belum terhubung ke Firebase. Jika baru saja mengubah konfigurasi, coba muat ulang halaman.', 'info');
+                }
+            } catch (err) {
+                console.error('Manual sync gagal:', err);
+                showToast('Gagal menyinkronkan data, coba lagi', 'info');
+            }
+
+            updateSyncStatusUI();
+            btn.disabled = false;
+            icon.classList.remove('fa-spin');
         }
 
         function showFirebaseBanner(type, message) {
@@ -1871,18 +1963,21 @@
             onSnapshot(collection(db, 'programs'), (snap) => {
                 state.programs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 renderAllData();
+                markSynced();
             }, (err) => console.error('Listener programs error:', err));
 
             // Listener Realtime: Donasi
             onSnapshot(query(collection(db, 'donations'), orderBy('createdAt', 'desc')), (snap) => {
                 state.donations = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 renderAllData();
+                markSynced();
             }, (err) => {
                 console.error('Listener donations error:', err);
                 // fallback tanpa orderBy jika field createdAt belum ada di sebagian dokumen lama
                 onSnapshot(collection(db, 'donations'), (snap) => {
                     state.donations = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     renderAllData();
+                    markSynced();
                 });
             });
 
@@ -1890,12 +1985,14 @@
             onSnapshot(collection(db, 'expenses'), (snap) => {
                 state.expenses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 renderAllData();
+                markSynced();
             }, (err) => console.error('Listener expenses error:', err));
 
             // Listener Realtime: Relawan
             onSnapshot(collection(db, 'volunteers'), (snap) => {
                 state.volunteers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 refreshAllStats();
+                markSynced();
             }, (err) => console.error('Listener volunteers error:', err));
 
             // Listener Realtime: Rekening Bank
@@ -1903,6 +2000,7 @@
                 state.bankAccounts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 renderAdminBankAccounts();
                 renderDonorBankAccounts();
+                markSynced();
             }, (err) => console.error('Listener bankAccounts error:', err));
 
             // Listener Realtime: Galeri Kegiatan
@@ -1910,6 +2008,7 @@
                 state.gallery = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 renderAdminGallery();
                 initGallery();
+                markSynced();
             }, (err) => console.error('Listener gallery error:', err));
         }
 
