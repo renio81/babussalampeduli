@@ -1783,7 +1783,8 @@
             const fs = window.firebaseState || { configured: false, connected: false };
             if (fs.configured && fs.connected) {
                 showFirebaseBanner('connected');
-                initFirebaseSync();
+                renderAllData(); // tampilkan data default lokal dulu supaya tidak ada jeda kosong/nol
+                initFirebaseSync(); // lalu timpa dengan data asli begitu Firestore selesai sinkron
             } else if (fs.configured && !fs.connected) {
                 showFirebaseBanner('error', fs.error);
                 renderAllData();
@@ -1884,10 +1885,22 @@
             } else if (type === 'error') {
                 banner.className = 'fixed top-0 left-0 right-0 z-[70] text-center text-[11px] font-semibold py-2 px-4 bg-rose-600 text-white';
                 text.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Gagal terhubung ke Firebase${message ? ' (' + message + ')' : ''} — mode lokal sementara digunakan`;
+            } else if (type === 'listener-error') {
+                banner.className = 'fixed top-0 left-0 right-0 z-[70] text-center text-[11px] font-semibold py-2 px-4 bg-rose-600 text-white cursor-pointer';
+                text.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Sinkronisasi realtime gagal (${message || 'unknown error'}) — cek Firestore Security Rules di Firebase Console`;
             } else {
                 banner.className = 'fixed top-0 left-0 right-0 z-[70] text-center text-[11px] font-semibold py-2 px-4 bg-amber-500 text-white';
                 text.innerHTML = '<i class="fa-solid fa-plug-circle-exclamation"></i> Firebase belum dikonfigurasi — data berjalan di mode lokal (tidak realtime)';
             }
+        }
+
+        // Menampilkan error listener Firestore secara jelas ke layar (bukan hanya di console)
+        // agar masalah permission/security rules langsung terlihat, tidak diam-diam gagal.
+        function showListenerError(collectionName, err) {
+            console.error(`Listener ${collectionName} error:`, err);
+            const code = err && err.code ? err.code : (err && err.message ? err.message : 'unknown');
+            showFirebaseBanner('listener-error', `${collectionName}: ${code}`);
+            showToast(`Gagal sinkron data "${collectionName}" (${code}). Cek Firestore Rules di Firebase Console.`, 'info');
         }
 
         // Helper tulis ke Firestore (dipanggil "fire-and-forget", aman dipanggil meski Firebase tidak aktif)
@@ -1897,7 +1910,7 @@
                 await window.fx.setDoc(window.fx.doc(window.db, colName, id), data);
             } catch (err) {
                 console.error(`dbSet(${colName}/${id}) gagal:`, err);
-                showToast('Gagal menyimpan ke Firebase, periksa koneksi', 'info');
+                showToast(`Gagal menyimpan ke Firebase (${err.code || err.message}). Cek Firestore Rules.`, 'info');
             }
         }
         async function dbUpdate(colName, id, data) {
@@ -1906,7 +1919,7 @@
                 await window.fx.updateDoc(window.fx.doc(window.db, colName, id), data);
             } catch (err) {
                 console.error(`dbUpdate(${colName}/${id}) gagal:`, err);
-                showToast('Gagal memperbarui data di Firebase', 'info');
+                showToast(`Gagal memperbarui data (${err.code || err.message}). Cek Firestore Rules.`, 'info');
             }
         }
         async function dbDelete(colName, id) {
@@ -1915,7 +1928,7 @@
                 await window.fx.deleteDoc(window.fx.doc(window.db, colName, id));
             } catch (err) {
                 console.error(`dbDelete(${colName}/${id}) gagal:`, err);
-                showToast('Gagal menghapus data di Firebase', 'info');
+                showToast(`Gagal menghapus data (${err.code || err.message}). Cek Firestore Rules.`, 'info');
             }
         }
 
@@ -1964,7 +1977,7 @@
                 state.programs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 renderAllData();
                 markSynced();
-            }, (err) => console.error('Listener programs error:', err));
+            }, (err) => showListenerError('programs', err));
 
             // Listener Realtime: Donasi
             onSnapshot(query(collection(db, 'donations'), orderBy('createdAt', 'desc')), (snap) => {
@@ -1972,13 +1985,13 @@
                 renderAllData();
                 markSynced();
             }, (err) => {
-                console.error('Listener donations error:', err);
+                console.error('Listener donations (orderBy) error, mencoba tanpa orderBy:', err);
                 // fallback tanpa orderBy jika field createdAt belum ada di sebagian dokumen lama
                 onSnapshot(collection(db, 'donations'), (snap) => {
                     state.donations = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     renderAllData();
                     markSynced();
-                });
+                }, (err2) => showListenerError('donations', err2));
             });
 
             // Listener Realtime: Pengeluaran
@@ -1986,14 +1999,14 @@
                 state.expenses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 renderAllData();
                 markSynced();
-            }, (err) => console.error('Listener expenses error:', err));
+            }, (err) => showListenerError('expenses', err));
 
             // Listener Realtime: Relawan
             onSnapshot(collection(db, 'volunteers'), (snap) => {
                 state.volunteers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 refreshAllStats();
                 markSynced();
-            }, (err) => console.error('Listener volunteers error:', err));
+            }, (err) => showListenerError('volunteers', err));
 
             // Listener Realtime: Rekening Bank
             onSnapshot(collection(db, 'bankAccounts'), (snap) => {
@@ -2001,7 +2014,7 @@
                 renderAdminBankAccounts();
                 renderDonorBankAccounts();
                 markSynced();
-            }, (err) => console.error('Listener bankAccounts error:', err));
+            }, (err) => showListenerError('bankAccounts', err));
 
             // Listener Realtime: Galeri Kegiatan
             onSnapshot(collection(db, 'gallery'), (snap) => {
@@ -2009,7 +2022,7 @@
                 renderAdminGallery();
                 initGallery();
                 markSynced();
-            }, (err) => console.error('Listener gallery error:', err));
+            }, (err) => showListenerError('gallery', err));
         }
 
         function switchTab(viewId) {
