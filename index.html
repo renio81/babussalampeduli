@@ -45,52 +45,27 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-    <!-- ============ FIREBASE (FIRESTORE REALTIME) ============ -->
-    <!-- GANTI seluruh objek firebaseConfig di bawah ini dengan config dari Firebase Console kamu -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import {
-            getFirestore, collection, doc, addDoc, setDoc, updateDoc, deleteDoc,
-            onSnapshot, query, orderBy, getDocs, increment, serverTimestamp, writeBatch
-        } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    <!-- ============ SUPABASE (POSTGRES REALTIME) ============ -->
+    <!-- GANTI SUPABASE_URL dan SUPABASE_ANON_KEY di bawah ini dengan milik project Supabase kamu -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script>
+        // >>> GANTI DENGAN Project URL & anon public key ASLI DARI SUPABASE DASHBOARD > SETTINGS > API <<<
+        const SUPABASE_URL = "https://rizrgogramouczmtztxt.supabase.co";
+        const SUPABASE_ANON_KEY = "sb_publishable_Vu-jHSAPzm4vvjHnKqe1Qw_rqWASJeD";
 
-        // >>> GANTI DENGAN firebaseConfig ASLI DARI FIREBASE CONSOLE KAMU <<<
-        const firebaseConfig = {
-            apiKey: "AIzaSyDuwUGRpQPLW6DWanC1w3pQvZbv0a-TKPI",
-            authDomain: "babussalampeduli.firebaseapp.com",
-            projectId: "babussalampeduli",
-            storageBucket: "babussalampeduli.firebasestorage.app",
-            messagingSenderId: "531358283261",
-            appId: "1:531358283261:web:e71366b9086bd82e6a5594",
-            measurementId: "G-HPQTY6HZT3"
-        };
+        const isSupaConfigured = SUPABASE_URL && !SUPABASE_URL.startsWith('GANTI') && SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.startsWith('GANTI');
 
-        const isConfigured = firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith('GANTI');
+        window.dbState = { connected: false, configured: isSupaConfigured, error: null };
 
-        window.firebaseState = { connected: false, configured: isConfigured, error: null };
-
-        if (isConfigured) {
+        if (isSupaConfigured) {
             try {
-                const app = initializeApp(firebaseConfig);
-                const db = getFirestore(app);
-
-                // Expose Firestore instance & helper functions secara global
-                // supaya bisa dipakai dari script utama (non-module) di bawah.
-                window.db = db;
-                window.fx = {
-                    collection, doc, addDoc, setDoc, updateDoc, deleteDoc,
-                    onSnapshot, query, orderBy, getDocs, increment, serverTimestamp, writeBatch
-                };
-                window.firebaseState.connected = true;
+                window.sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                window.dbState.connected = true;
             } catch (err) {
-                console.error('Firebase init error:', err);
-                window.firebaseState.error = err.message;
+                console.error('Supabase init error:', err);
+                window.dbState.error = err.message;
             }
         }
-
-        // Beritahu script utama bahwa proses inisialisasi Firebase sudah selesai
-        // (baik berhasil terhubung, gagal, maupun belum dikonfigurasi).
-        window.dispatchEvent(new CustomEvent('firebase-init-done'));
     </script>
 
     <style>
@@ -125,9 +100,9 @@
 </head>
 <body class="h-full text-slate-800 flex flex-col antialiased selection:bg-emerald-100 selection:text-emerald-800">
 
-    <!-- Status Koneksi Firebase -->
-    <div id="firebase-status-banner" class="hidden fixed top-0 left-0 right-0 z-[70] text-center text-[11px] font-semibold py-2 px-4">
-        <span id="firebase-status-text"></span>
+    <!-- Status Koneksi Database -->
+    <div id="db-status-banner" class="hidden fixed top-0 left-0 right-0 z-[70] text-center text-[11px] font-semibold py-2 px-4">
+        <span id="db-status-text"></span>
     </div>
 
     <div id="app" class="min-h-screen flex flex-col md:flex-row bg-slate-50 relative pb-20 md:pb-0">
@@ -1761,35 +1736,27 @@
             refreshAllStats();
         }
 
-        // ============ FIREBASE: BOOTSTRAP & REALTIME SYNC ============
-        function isFirebaseActive() {
-            return !!(window.firebaseState && window.firebaseState.configured && window.firebaseState.connected && window.db && window.fx);
+        // ============ SUPABASE: BOOTSTRAP & REALTIME SYNC ============
+        function isDbActive() {
+            return !!(window.dbState && window.dbState.configured && window.dbState.connected && window.sb);
         }
 
         function bootApp() {
-            if (window.firebaseState) {
-                proceedBoot();
-            } else {
-                let started = false;
-                window.addEventListener('firebase-init-done', () => {
-                    if (!started) { started = true; proceedBoot(); }
-                });
-                // Jaga-jaga jika modul Firebase lambat/gagal dimuat dari CDN
-                setTimeout(() => { if (!started) { started = true; proceedBoot(); } }, 4000);
-            }
+            // Client Supabase bersifat sinkron (tidak perlu menunggu event async seperti Firebase)
+            proceedBoot();
         }
 
         function proceedBoot() {
-            const fs = window.firebaseState || { configured: false, connected: false };
-            if (fs.configured && fs.connected) {
-                showFirebaseBanner('connected');
+            const ds = window.dbState || { configured: false, connected: false };
+            if (ds.configured && ds.connected) {
+                showDbBanner('connected');
                 renderAllData(); // tampilkan data default lokal dulu supaya tidak ada jeda kosong/nol
-                initFirebaseSync(); // lalu timpa dengan data asli begitu Firestore selesai sinkron
-            } else if (fs.configured && !fs.connected) {
-                showFirebaseBanner('error', fs.error);
+                initSupabaseSync(); // lalu timpa dengan data asli begitu Supabase selesai sinkron
+            } else if (ds.configured && !ds.connected) {
+                showDbBanner('error', ds.error);
                 renderAllData();
             } else {
-                showFirebaseBanner('not-configured');
+                showDbBanner('not-configured');
                 renderAllData();
             }
             updateSyncStatusUI();
@@ -1809,14 +1776,14 @@
             const timeEl = document.getElementById('sync-last-time');
             if (!dot || !label || !timeEl) return;
 
-            if (isFirebaseActive()) {
+            if (isDbActive()) {
                 dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0 animate-pulse';
-                label.innerText = 'Realtime Aktif — Terhubung ke Firebase';
+                label.innerText = 'Realtime Aktif — Terhubung ke Supabase';
                 label.className = 'text-xs font-bold text-emerald-700';
             } else {
-                const fs = window.firebaseState || {};
+                const ds = window.dbState || {};
                 dot.className = 'w-2.5 h-2.5 rounded-full bg-rose-400 shrink-0';
-                label.innerText = fs.configured ? 'Terputus dari Firebase — mode lokal' : 'Firebase belum dikonfigurasi — mode lokal';
+                label.innerText = ds.configured ? 'Terputus dari Supabase — mode lokal' : 'Supabase belum dikonfigurasi — mode lokal';
                 label.className = 'text-xs font-bold text-rose-600';
             }
 
@@ -1832,35 +1799,32 @@
             icon.classList.add('fa-spin');
 
             try {
-                if (isFirebaseActive()) {
-                    // Sudah realtime — tarik ulang seluruh data terbaru langsung dari Firestore
-                    const { collection, getDocs, query, orderBy } = window.fx;
-                    const db = window.db;
-
-                    const [progSnap, donSnap, expSnap, volSnap, bankSnap, galSnap] = await Promise.all([
-                        getDocs(collection(db, 'programs')),
-                        getDocs(query(collection(db, 'donations'), orderBy('createdAt', 'desc'))).catch(() => getDocs(collection(db, 'donations'))),
-                        getDocs(collection(db, 'expenses')),
-                        getDocs(collection(db, 'volunteers')),
-                        getDocs(collection(db, 'bankAccounts')),
-                        getDocs(collection(db, 'gallery'))
+                if (isDbActive()) {
+                    // Sudah realtime — tarik ulang seluruh data terbaru langsung dari Supabase
+                    const [progRes, donRes, expRes, volRes, bankRes, galRes] = await Promise.all([
+                        window.sb.from('programs').select('*'),
+                        window.sb.from('donations').select('*').order('createdAt', { ascending: false }),
+                        window.sb.from('expenses').select('*'),
+                        window.sb.from('volunteers').select('*'),
+                        window.sb.from('bankAccounts').select('*'),
+                        window.sb.from('gallery').select('*')
                     ]);
 
-                    state.programs = progSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    state.donations = donSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    state.expenses = expSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    state.volunteers = volSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    state.bankAccounts = bankSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    state.gallery = galSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    if (progRes.data) state.programs = progRes.data;
+                    if (donRes.data) state.donations = donRes.data;
+                    if (expRes.data) state.expenses = expRes.data;
+                    if (volRes.data) state.volunteers = volRes.data;
+                    if (bankRes.data) state.bankAccounts = bankRes.data;
+                    if (galRes.data) state.gallery = galRes.data;
 
                     renderAllData();
                     initGallery();
                     markSynced();
-                    showToast('Data berhasil disinkronkan dari Firebase');
+                    showToast('Data berhasil disinkronkan dari Supabase');
                 } else {
                     // Belum/gagal terhubung — coba sambungkan ulang
                     bootApp();
-                    showToast('Belum terhubung ke Firebase. Jika baru saja mengubah konfigurasi, coba muat ulang halaman.', 'info');
+                    showToast('Belum terhubung ke Supabase. Jika baru saja mengubah konfigurasi, coba muat ulang halaman.', 'info');
                 }
             } catch (err) {
                 console.error('Manual sync gagal:', err);
@@ -1872,157 +1836,141 @@
             icon.classList.remove('fa-spin');
         }
 
-        function showFirebaseBanner(type, message) {
-            const banner = document.getElementById('firebase-status-banner');
-            const text = document.getElementById('firebase-status-text');
+        function showDbBanner(type, message) {
+            const banner = document.getElementById('db-status-banner');
+            const text = document.getElementById('db-status-text');
             if (!banner || !text) return;
             banner.classList.remove('hidden');
 
             if (type === 'connected') {
                 banner.className = 'fixed top-0 left-0 right-0 z-[70] text-center text-[11px] font-semibold py-2 px-4 bg-emerald-600 text-white';
-                text.innerHTML = '<i class="fa-solid fa-circle-check"></i> Terhubung ke Firebase — data tersinkron real-time';
+                text.innerHTML = '<i class="fa-solid fa-circle-check"></i> Terhubung ke Supabase — data tersinkron real-time';
                 setTimeout(() => banner.classList.add('hidden'), 4000);
             } else if (type === 'error') {
                 banner.className = 'fixed top-0 left-0 right-0 z-[70] text-center text-[11px] font-semibold py-2 px-4 bg-rose-600 text-white';
-                text.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Gagal terhubung ke Firebase${message ? ' (' + message + ')' : ''} — mode lokal sementara digunakan`;
+                text.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Gagal terhubung ke Supabase${message ? ' (' + message + ')' : ''} — mode lokal sementara digunakan`;
             } else if (type === 'listener-error') {
                 banner.className = 'fixed top-0 left-0 right-0 z-[70] text-center text-[11px] font-semibold py-2 px-4 bg-rose-600 text-white cursor-pointer';
-                text.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Sinkronisasi realtime gagal (${message || 'unknown error'}) — cek Firestore Security Rules di Firebase Console`;
+                text.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Sinkronisasi realtime gagal (${message || 'unknown error'}) — cek Row Level Security Policy di Supabase`;
             } else {
                 banner.className = 'fixed top-0 left-0 right-0 z-[70] text-center text-[11px] font-semibold py-2 px-4 bg-amber-500 text-white';
-                text.innerHTML = '<i class="fa-solid fa-plug-circle-exclamation"></i> Firebase belum dikonfigurasi — data berjalan di mode lokal (tidak realtime)';
+                text.innerHTML = '<i class="fa-solid fa-plug-circle-exclamation"></i> Supabase belum dikonfigurasi — data berjalan di mode lokal (tidak realtime)';
             }
         }
 
-        // Menampilkan error listener Firestore secara jelas ke layar (bukan hanya di console)
-        // agar masalah permission/security rules langsung terlihat, tidak diam-diam gagal.
-        function showListenerError(collectionName, err) {
-            console.error(`Listener ${collectionName} error:`, err);
+        // Menampilkan error listener Supabase secara jelas ke layar (bukan hanya di console)
+        function showListenerError(tableName, err) {
+            console.error(`Listener ${tableName} error:`, err);
             const code = err && err.code ? err.code : (err && err.message ? err.message : 'unknown');
-            showFirebaseBanner('listener-error', `${collectionName}: ${code}`);
-            showToast(`Gagal sinkron data "${collectionName}" (${code}). Cek Firestore Rules di Firebase Console.`, 'info');
+            showDbBanner('listener-error', `${tableName}: ${code}`);
+            showToast(`Gagal sinkron data "${tableName}" (${code}). Cek RLS Policy di Supabase.`, 'info');
         }
 
-        // Helper tulis ke Firestore (dipanggil "fire-and-forget", aman dipanggil meski Firebase tidak aktif)
-        async function dbSet(colName, id, data) {
-            if (!isFirebaseActive()) return;
+        // Helper tulis ke Supabase (dipanggil "fire-and-forget", aman dipanggil meski Supabase tidak aktif)
+        async function dbSet(table, id, data) {
+            if (!isDbActive()) return;
             try {
-                await window.fx.setDoc(window.fx.doc(window.db, colName, id), data);
+                const { error } = await window.sb.from(table).upsert({ id, ...data });
+                if (error) throw error;
             } catch (err) {
-                console.error(`dbSet(${colName}/${id}) gagal:`, err);
-                showToast(`Gagal menyimpan ke Firebase (${err.code || err.message}). Cek Firestore Rules.`, 'info');
+                console.error(`dbSet(${table}/${id}) gagal:`, err);
+                showToast(`Gagal menyimpan ke Supabase (${err.message || err.code}). Cek RLS Policy.`, 'info');
             }
         }
-        async function dbUpdate(colName, id, data) {
-            if (!isFirebaseActive()) return;
+        async function dbUpdate(table, id, data) {
+            if (!isDbActive()) return;
             try {
-                await window.fx.updateDoc(window.fx.doc(window.db, colName, id), data);
+                const { error } = await window.sb.from(table).update(data).eq('id', id);
+                if (error) throw error;
             } catch (err) {
-                console.error(`dbUpdate(${colName}/${id}) gagal:`, err);
-                showToast(`Gagal memperbarui data (${err.code || err.message}). Cek Firestore Rules.`, 'info');
+                console.error(`dbUpdate(${table}/${id}) gagal:`, err);
+                showToast(`Gagal memperbarui data (${err.message || err.code}). Cek RLS Policy.`, 'info');
             }
         }
-        async function dbDelete(colName, id) {
-            if (!isFirebaseActive()) return;
+        async function dbDelete(table, id) {
+            if (!isDbActive()) return;
             try {
-                await window.fx.deleteDoc(window.fx.doc(window.db, colName, id));
+                const { error } = await window.sb.from(table).delete().eq('id', id);
+                if (error) throw error;
             } catch (err) {
-                console.error(`dbDelete(${colName}/${id}) gagal:`, err);
-                showToast(`Gagal menghapus data (${err.code || err.message}). Cek Firestore Rules.`, 'info');
+                console.error(`dbDelete(${table}/${id}) gagal:`, err);
+                showToast(`Gagal menghapus data (${err.message || err.code}). Cek RLS Policy.`, 'info');
             }
         }
 
-        async function initFirebaseSync() {
-            const { collection, doc, getDocs, onSnapshot, query, orderBy, setDoc } = window.fx;
-            const db = window.db;
+        async function initSupabaseSync() {
+            const sb = window.sb;
 
-            // Seed data awal ke Firestore HANYA jika koleksi 'programs' masih kosong
+            // Seed data awal HANYA jika tabel 'programs' masih kosong
             try {
-                const progSnap = await getDocs(collection(db, 'programs'));
-                if (progSnap.empty) {
-                    for (const p of DEFAULT_PROGRAMS) {
-                        await setDoc(doc(db, 'programs', p.id), p);
-                    }
+                const { data, error } = await sb.from('programs').select('id').limit(1);
+                if (!error && data && data.length === 0) {
+                    await sb.from('programs').insert(DEFAULT_PROGRAMS);
                 }
             } catch (err) {
-                console.error('Gagal seeding data awal ke Firestore:', err);
+                console.error('Gagal seeding data awal ke Supabase:', err);
             }
 
-            // Seed rekening bank default HANYA jika koleksi 'bankAccounts' masih kosong
+            // Seed rekening bank default HANYA jika tabel 'bankAccounts' masih kosong
             try {
-                const bankSnap = await getDocs(collection(db, 'bankAccounts'));
-                if (bankSnap.empty) {
-                    for (const b of state.bankAccounts) {
-                        await setDoc(doc(db, 'bankAccounts', b.id), b);
-                    }
+                const { data, error } = await sb.from('bankAccounts').select('id').limit(1);
+                if (!error && data && data.length === 0) {
+                    await sb.from('bankAccounts').insert(state.bankAccounts);
                 }
             } catch (err) {
-                console.error('Gagal seeding rekening bank awal ke Firestore:', err);
+                console.error('Gagal seeding rekening bank awal ke Supabase:', err);
             }
 
-            // Seed galeri kegiatan default HANYA jika koleksi 'gallery' masih kosong
+            // Seed galeri kegiatan default HANYA jika tabel 'gallery' masih kosong
             try {
-                const gallerySnap = await getDocs(collection(db, 'gallery'));
-                if (gallerySnap.empty) {
-                    for (const g of DEFAULT_GALLERY) {
-                        await setDoc(doc(db, 'gallery', g.id), g);
-                    }
+                const { data, error } = await sb.from('gallery').select('id').limit(1);
+                if (!error && data && data.length === 0) {
+                    await sb.from('gallery').insert(DEFAULT_GALLERY);
                 }
             } catch (err) {
-                console.error('Gagal seeding galeri awal ke Firestore:', err);
+                console.error('Gagal seeding galeri awal ke Supabase:', err);
             }
 
-            // Listener Realtime: Programs
-            onSnapshot(collection(db, 'programs'), (snap) => {
-                state.programs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                renderAllData();
-                markSynced();
-            }, (err) => showListenerError('programs', err));
+            // Ambil data awal untuk seluruh tabel
+            async function fetchTable(table, orderCol) {
+                let q = sb.from(table).select('*');
+                if (orderCol) q = q.order(orderCol, { ascending: false });
+                const { data, error } = await q;
+                if (error) { showListenerError(table, error); return []; }
+                return data || [];
+            }
 
-            // Listener Realtime: Donasi
-            onSnapshot(query(collection(db, 'donations'), orderBy('createdAt', 'desc')), (snap) => {
-                state.donations = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                renderAllData();
-                markSynced();
-            }, (err) => {
-                console.error('Listener donations (orderBy) error, mencoba tanpa orderBy:', err);
-                // fallback tanpa orderBy jika field createdAt belum ada di sebagian dokumen lama
-                onSnapshot(collection(db, 'donations'), (snap) => {
-                    state.donations = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    renderAllData();
-                    markSynced();
-                }, (err2) => showListenerError('donations', err2));
+            state.programs = await fetchTable('programs');
+            state.donations = await fetchTable('donations', 'createdAt');
+            state.expenses = await fetchTable('expenses');
+            state.volunteers = await fetchTable('volunteers');
+            state.bankAccounts = await fetchTable('bankAccounts');
+            state.gallery = await fetchTable('gallery');
+            renderAllData();
+            initGallery();
+            markSynced();
+
+            // Berlangganan Realtime: setiap ada perubahan di tabel, tarik ulang data tabel tsb
+            const channel = sb.channel('babussalampeduli-realtime');
+
+            const tablesConfig = [
+                { table: 'programs', onChange: async () => { state.programs = await fetchTable('programs'); renderAllData(); markSynced(); } },
+                { table: 'donations', onChange: async () => { state.donations = await fetchTable('donations', 'createdAt'); renderAllData(); markSynced(); } },
+                { table: 'expenses', onChange: async () => { state.expenses = await fetchTable('expenses'); renderAllData(); markSynced(); } },
+                { table: 'volunteers', onChange: async () => { state.volunteers = await fetchTable('volunteers'); refreshAllStats(); markSynced(); } },
+                { table: 'bankAccounts', onChange: async () => { state.bankAccounts = await fetchTable('bankAccounts'); renderAdminBankAccounts(); renderDonorBankAccounts(); markSynced(); } },
+                { table: 'gallery', onChange: async () => { state.gallery = await fetchTable('gallery'); renderAdminGallery(); initGallery(); markSynced(); } }
+            ];
+
+            tablesConfig.forEach(({ table, onChange }) => {
+                channel.on('postgres_changes', { event: '*', schema: 'public', table }, onChange);
             });
 
-            // Listener Realtime: Pengeluaran
-            onSnapshot(collection(db, 'expenses'), (snap) => {
-                state.expenses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                renderAllData();
-                markSynced();
-            }, (err) => showListenerError('expenses', err));
-
-            // Listener Realtime: Relawan
-            onSnapshot(collection(db, 'volunteers'), (snap) => {
-                state.volunteers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                refreshAllStats();
-                markSynced();
-            }, (err) => showListenerError('volunteers', err));
-
-            // Listener Realtime: Rekening Bank
-            onSnapshot(collection(db, 'bankAccounts'), (snap) => {
-                state.bankAccounts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                renderAdminBankAccounts();
-                renderDonorBankAccounts();
-                markSynced();
-            }, (err) => showListenerError('bankAccounts', err));
-
-            // Listener Realtime: Galeri Kegiatan
-            onSnapshot(collection(db, 'gallery'), (snap) => {
-                state.gallery = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                renderAdminGallery();
-                initGallery();
-                markSynced();
-            }, (err) => showListenerError('gallery', err));
+            channel.subscribe((status, err) => {
+                if (status === 'CHANNEL_ERROR' || err) {
+                    showListenerError('realtime-channel', err || new Error(status));
+                }
+            });
         }
 
         function switchTab(viewId) {
@@ -2957,7 +2905,7 @@
             };
             state.volunteers.push(newVolunteer);
             saveState();
-            dbSet('volunteers', newVolunteer.id, { ...newVolunteer, createdAt: isFirebaseActive() ? window.fx.serverTimestamp() : Date.now() });
+            dbSet('volunteers', newVolunteer.id, { ...newVolunteer, createdAt: new Date().toISOString() });
             showToast('Pendaftaran relawan berhasil dikirim! Tim kami akan menghubungi via WA.');
             e.target.reset();
             switchTab('home');
@@ -3038,7 +2986,7 @@
                 saveState();
 
                 dbUpdate('donations', txId, { status: 'SUCCESS' });
-                if (p) dbUpdate('programs', p.id, { collected: isFirebaseActive() ? window.fx.increment(tx.amount) : p.collected });
+                if (p) dbUpdate('programs', p.id, { collected: p.collected });
 
                 renderAdminTable();
                 renderHomePrograms();
@@ -3088,7 +3036,6 @@
             const amount = parseInt(document.getElementById('tx-amount').value);
             const method = document.getElementById('tx-method').value;
             const status = document.getElementById('tx-status').value;
-            const fbOn = isFirebaseActive();
 
             if (editId) {
                 // Mode Ubah: lepaskan dulu efek lama ke program sebelumnya, lalu terapkan efek baru
@@ -3097,10 +3044,10 @@
                     const oldProgramId = tx.programId;
                     const oldAmount = tx.amount;
                     const wasSuccess = tx.status === 'SUCCESS';
+                    const oldProgram = state.programs.find(p => p.id === oldProgramId);
 
-                    if (wasSuccess) {
-                        const oldProgram = state.programs.find(p => p.id === oldProgramId);
-                        if (oldProgram) oldProgram.collected = Math.max(0, oldProgram.collected - oldAmount);
+                    if (wasSuccess && oldProgram) {
+                        oldProgram.collected = Math.max(0, oldProgram.collected - oldAmount);
                     }
                     tx.programId = programId;
                     tx.programTitle = program ? program.title : tx.programTitle;
@@ -3113,11 +3060,11 @@
                     }
 
                     dbUpdate('donations', editId, { programId, programTitle: tx.programTitle, donorName, amount, method, status });
-                    if (wasSuccess) {
-                        dbUpdate('programs', oldProgramId, { collected: fbOn ? window.fx.increment(-oldAmount) : undefined });
+                    if (wasSuccess && oldProgram) {
+                        dbUpdate('programs', oldProgramId, { collected: oldProgram.collected });
                     }
                     if (status === 'SUCCESS' && program) {
-                        dbUpdate('programs', programId, { collected: fbOn ? window.fx.increment(amount) : undefined });
+                        dbUpdate('programs', programId, { collected: program.collected });
                     }
                 }
                 showToast('Transaksi berhasil diperbarui');
@@ -3136,9 +3083,9 @@
                 state.donations.unshift(newTx);
                 if (status === 'SUCCESS' && program) program.collected += amount;
 
-                dbSet('donations', newTx.id, { ...newTx, createdAt: fbOn ? window.fx.serverTimestamp() : Date.now() });
+                dbSet('donations', newTx.id, { ...newTx, createdAt: new Date().toISOString() });
                 if (status === 'SUCCESS' && program) {
-                    dbUpdate('programs', programId, { collected: fbOn ? window.fx.increment(amount) : undefined });
+                    dbUpdate('programs', programId, { collected: program.collected });
                 }
                 showToast('Transaksi baru berhasil ditambahkan');
             }
@@ -3156,12 +3103,11 @@
         function deleteTx(txId) {
             if (!confirm('Yakin ingin menghapus transaksi ini? Nominal yang sudah tercatat pada program akan disesuaikan kembali.')) return;
             const tx = state.donations.find(t => t.id === txId);
-            const fbOn = isFirebaseActive();
             if (tx && tx.status === 'SUCCESS') {
                 const p = state.programs.find(p => p.id === tx.programId);
                 if (p) {
                     p.collected = Math.max(0, p.collected - tx.amount);
-                    dbUpdate('programs', p.id, { collected: fbOn ? window.fx.increment(-tx.amount) : p.collected });
+                    dbUpdate('programs', p.id, { collected: p.collected });
                 }
             }
             state.donations = state.donations.filter(t => t.id !== txId);
@@ -3255,7 +3201,6 @@
             const category = document.getElementById('exp-category').value;
             const rawDate = document.getElementById('exp-date').value;
             const formattedDate = new Date(rawDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-            const fbOn = isFirebaseActive();
 
             if (editId) {
                 // Mode Ubah: lepaskan efek lama ke program sebelumnya, lalu terapkan efek baru
@@ -3277,8 +3222,8 @@
                     if (program) program.spent = (program.spent || 0) + amount;
 
                     dbUpdate('expenses', editId, { programId, programTitle: x.programTitle, description, amount, category, date: formattedDate, rawDate });
-                    if (oldProgram) dbUpdate('programs', oldProgramId, { spent: fbOn ? window.fx.increment(-oldAmount) : undefined });
-                    if (program) dbUpdate('programs', programId, { spent: fbOn ? window.fx.increment(amount) : undefined });
+                    if (oldProgram) dbUpdate('programs', oldProgramId, { spent: oldProgram.spent });
+                    if (program) dbUpdate('programs', programId, { spent: program.spent });
                 }
                 showToast('Pengeluaran berhasil diperbarui');
             } else {
@@ -3296,8 +3241,8 @@
                 state.expenses.unshift(newExp);
                 if (program) program.spent = (program.spent || 0) + amount;
 
-                dbSet('expenses', newExp.id, { ...newExp, createdAt: fbOn ? window.fx.serverTimestamp() : Date.now() });
-                if (program) dbUpdate('programs', programId, { spent: fbOn ? window.fx.increment(amount) : undefined });
+                dbSet('expenses', newExp.id, { ...newExp, createdAt: new Date().toISOString() });
+                if (program) dbUpdate('programs', programId, { spent: program.spent });
                 showToast('Pengeluaran baru berhasil dicatat');
             }
 
@@ -3312,12 +3257,11 @@
         function deleteExpense(expId) {
             if (!confirm('Yakin ingin menghapus catatan pengeluaran ini? Saldo program akan disesuaikan kembali.')) return;
             const x = state.expenses.find(e => e.id === expId);
-            const fbOn = isFirebaseActive();
             if (x) {
                 const p = state.programs.find(p => p.id === x.programId);
                 if (p) {
                     p.spent = Math.max(0, (p.spent || 0) - x.amount);
-                    dbUpdate('programs', p.id, { spent: fbOn ? window.fx.increment(-x.amount) : p.spent });
+                    dbUpdate('programs', p.id, { spent: p.spent });
                 }
             }
             state.expenses = state.expenses.filter(e => e.id !== expId);
@@ -3869,7 +3813,7 @@
             btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Kirim untuk Diverifikasi';
         }
 
-        // Kompres foto di sisi browser (agar aman disimpan sebagai Base64 di Firestore, max ~1MB/dokumen)
+        // Kompres foto di sisi browser (agar aman disimpan sebagai Base64 di database)
         function compressImageToBase64(file, maxWidth = 900, quality = 0.6) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -3943,11 +3887,11 @@
             state.donations.unshift(tx);
             saveState();
 
-            const txForDb = { ...tx, createdAt: isFirebaseActive() ? window.fx.serverTimestamp() : Date.now() };
+            const txForDb = { ...tx, createdAt: new Date().toISOString() };
             try {
                 await dbSet('donations', tx.id, txForDb);
             } catch (err) {
-                console.error('Gagal mengirim bukti ke Firestore:', err);
+                console.error('Gagal mengirim bukti ke Supabase:', err);
             }
 
             // Populate Pending View
