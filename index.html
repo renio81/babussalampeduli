@@ -1748,16 +1748,9 @@
 
         function proceedBoot() {
             const ds = window.dbState || { configured: false, connected: false };
+            renderAllData(); // tampilkan data lokal dulu supaya tidak ada jeda kosong
             if (ds.configured && ds.connected) {
-                showDbBanner('connected');
-                renderAllData(); // tampilkan data default lokal dulu supaya tidak ada jeda kosong/nol
-                initSupabaseSync(); // lalu timpa dengan data asli begitu Supabase selesai sinkron
-            } else if (ds.configured && !ds.connected) {
-                showDbBanner('error', ds.error);
-                renderAllData();
-            } else {
-                showDbBanner('not-configured');
-                renderAllData();
+                initSupabaseSync(); // lalu timpa dengan data asli begitu Supabase selesai diambil
             }
             updateSyncStatusUI();
         }
@@ -1782,9 +1775,9 @@
                 label.className = 'text-xs font-bold text-emerald-700';
             } else {
                 const ds = window.dbState || {};
-                dot.className = 'w-2.5 h-2.5 rounded-full bg-rose-400 shrink-0';
-                label.innerText = ds.configured ? 'Terputus dari Supabase — mode lokal' : 'Supabase belum dikonfigurasi — mode lokal';
-                label.className = 'text-xs font-bold text-rose-600';
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-slate-300 shrink-0';
+                label.innerText = 'Mode lokal (data tidak tersimpan permanen)';
+                label.className = 'text-xs font-bold text-slate-500';
             }
 
             timeEl.innerText = lastSyncTime
@@ -1801,25 +1794,33 @@
             try {
                 if (isDbActive()) {
                     // Tarik ulang seluruh data terbaru langsung dari Supabase
-                    state.programs = await fetchTable('programs');
-                    state.donations = await fetchTable('donations', 'createdAt');
-                    state.expenses = await fetchTable('expenses');
-                    state.volunteers = await fetchTable('volunteers');
-                    state.bankAccounts = await fetchTable('bankAccounts');
-                    state.gallery = await fetchTable('gallery');
+                    // (fetchTable akan mengembalikan null bila gagal, sehingga data lokal yang sudah ada tidak tertimpa kosong)
+                    const results = await Promise.all([
+                        fetchTable('programs'),
+                        fetchTable('donations', 'createdAt'),
+                        fetchTable('expenses'),
+                        fetchTable('volunteers'),
+                        fetchTable('bankAccounts'),
+                        fetchTable('gallery')
+                    ]);
+                    const [progs, dons, exps, vols, banks, gals] = results;
+                    if (progs) state.programs = progs;
+                    if (dons) state.donations = dons;
+                    if (exps) state.expenses = exps;
+                    if (vols) state.volunteers = vols;
+                    if (banks) state.bankAccounts = banks;
+                    if (gals) state.gallery = gals;
 
                     renderAllData();
                     initGallery();
                     markSynced();
-                    showToast('Data berhasil disinkronkan dari Supabase');
+                    showToast('Data berhasil disinkronkan');
                 } else {
-                    // Belum/gagal terhubung — coba sambungkan ulang
                     bootApp();
-                    showToast('Belum terhubung ke Supabase. Jika baru saja mengubah konfigurasi, coba muat ulang halaman.', 'info');
+                    showToast('Menggunakan mode lokal, data tidak tersimpan permanen', 'info');
                 }
             } catch (err) {
                 console.error('Manual sync gagal:', err);
-                showToast('Gagal menyinkronkan data, coba lagi', 'info');
             }
 
             updateSyncStatusUI();
@@ -1828,44 +1829,37 @@
         }
 
         function showDbBanner(type, message) {
+            // Hanya tampilkan notifikasi saat BERHASIL terhubung. Kegagalan koneksi/sinkron
+            // sengaja tidak ditampilkan ke pengguna (dicatat diam-diam di console saja)
+            // supaya aplikasi tetap nyaman dipakai walau sedang mode lokal.
+            if (type !== 'connected') {
+                console.warn('Status database:', type, message || '');
+                return;
+            }
             const banner = document.getElementById('db-status-banner');
             const text = document.getElementById('db-status-text');
             if (!banner || !text) return;
+            banner.className = 'fixed top-0 left-0 right-0 z-[70] text-center text-[11px] font-semibold py-2 px-4 bg-emerald-600 text-white';
+            text.innerHTML = '<i class="fa-solid fa-circle-check"></i> Terhubung ke Supabase — perubahan data otomatis tersimpan';
             banner.classList.remove('hidden');
-
-            if (type === 'connected') {
-                banner.className = 'fixed top-0 left-0 right-0 z-[70] text-center text-[11px] font-semibold py-2 px-4 bg-emerald-600 text-white';
-                text.innerHTML = '<i class="fa-solid fa-circle-check"></i> Terhubung ke Supabase — perubahan data otomatis tersimpan';
-                setTimeout(() => banner.classList.add('hidden'), 4000);
-            } else if (type === 'error') {
-                banner.className = 'fixed top-0 left-0 right-0 z-[70] text-center text-[11px] font-semibold py-2 px-4 bg-rose-600 text-white';
-                text.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Gagal terhubung ke Supabase${message ? ' (' + message + ')' : ''} — mode lokal sementara digunakan`;
-            } else if (type === 'listener-error') {
-                banner.className = 'fixed top-0 left-0 right-0 z-[70] text-center text-[11px] font-semibold py-2 px-4 bg-rose-600 text-white cursor-pointer';
-                text.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Gagal mengambil data (${message || 'unknown error'}) — cek Row Level Security Policy di Supabase`;
-            } else {
-                banner.className = 'fixed top-0 left-0 right-0 z-[70] text-center text-[11px] font-semibold py-2 px-4 bg-amber-500 text-white';
-                text.innerHTML = '<i class="fa-solid fa-plug-circle-exclamation"></i> Supabase belum dikonfigurasi — data berjalan di mode lokal (tidak tersimpan permanen)';
-            }
+            setTimeout(() => banner.classList.add('hidden'), 4000);
         }
 
-        // Menampilkan error listener Supabase secara jelas ke layar (bukan hanya di console)
+        // Mencatat error pengambilan data secara diam-diam (tidak mengganggu tampilan pengguna)
         function showListenerError(tableName, err) {
-            console.error(`Listener ${tableName} error:`, err);
             const code = err && err.code ? err.code : (err && err.message ? err.message : 'unknown');
-            showDbBanner('listener-error', `${tableName}: ${code}`);
-            showToast(`Gagal sinkron data "${tableName}" (${code}). Cek RLS Policy di Supabase.`, 'info');
+            console.warn(`Gagal mengambil data "${tableName}": ${code}`, err);
         }
 
         // Helper tulis ke Supabase (dipanggil "fire-and-forget", aman dipanggil meski Supabase tidak aktif)
+        // Kegagalan penyimpanan dicatat diam-diam di console, tidak menampilkan notifikasi ke pengguna.
         async function dbSet(table, id, data) {
             if (!isDbActive()) return;
             try {
                 const { error } = await window.sb.from(table).upsert({ id, ...data });
                 if (error) throw error;
             } catch (err) {
-                console.error(`dbSet(${table}/${id}) gagal:`, err);
-                showToast(`Gagal menyimpan ke Supabase (${err.message || err.code}). Cek RLS Policy.`, 'info');
+                console.warn(`dbSet(${table}/${id}) gagal:`, err);
             }
         }
         async function dbUpdate(table, id, data) {
@@ -1874,8 +1868,7 @@
                 const { error } = await window.sb.from(table).update(data).eq('id', id);
                 if (error) throw error;
             } catch (err) {
-                console.error(`dbUpdate(${table}/${id}) gagal:`, err);
-                showToast(`Gagal memperbarui data (${err.message || err.code}). Cek RLS Policy.`, 'info');
+                console.warn(`dbUpdate(${table}/${id}) gagal:`, err);
             }
         }
         async function dbDelete(table, id) {
@@ -1884,8 +1877,7 @@
                 const { error } = await window.sb.from(table).delete().eq('id', id);
                 if (error) throw error;
             } catch (err) {
-                console.error(`dbDelete(${table}/${id}) gagal:`, err);
-                showToast(`Gagal menghapus data (${err.message || err.code}). Cek RLS Policy.`, 'info');
+                console.warn(`dbDelete(${table}/${id}) gagal:`, err);
             }
         }
 
@@ -1899,7 +1891,7 @@
                     await sb.from('programs').insert(DEFAULT_PROGRAMS);
                 }
             } catch (err) {
-                console.error('Gagal seeding data awal ke Supabase:', err);
+                console.warn('Gagal seeding data awal ke Supabase:', err);
             }
 
             // Seed rekening bank default HANYA jika tabel 'bankAccounts' masih kosong
@@ -1909,7 +1901,7 @@
                     await sb.from('bankAccounts').insert(state.bankAccounts);
                 }
             } catch (err) {
-                console.error('Gagal seeding rekening bank awal ke Supabase:', err);
+                console.warn('Gagal seeding rekening bank awal ke Supabase:', err);
             }
 
             // Seed galeri kegiatan default HANYA jika tabel 'gallery' masih kosong
@@ -1919,28 +1911,44 @@
                     await sb.from('gallery').insert(DEFAULT_GALLERY);
                 }
             } catch (err) {
-                console.error('Gagal seeding galeri awal ke Supabase:', err);
+                console.warn('Gagal seeding galeri awal ke Supabase:', err);
             }
 
-            // Ambil data terbaru untuk seluruh tabel (dipanggil saat halaman dibuka & saat sinkron manual)
-            state.programs = await fetchTable('programs');
-            state.donations = await fetchTable('donations', 'createdAt');
-            state.expenses = await fetchTable('expenses');
-            state.volunteers = await fetchTable('volunteers');
-            state.bankAccounts = await fetchTable('bankAccounts');
-            state.gallery = await fetchTable('gallery');
+            // Ambil data terbaru untuk seluruh tabel. Bila salah satu gagal diambil,
+            // data lokal yang sudah tampil TIDAK ditimpa kosong (fetchTable mengembalikan null saat gagal).
+            const [progs, dons, exps, vols, banks, gals] = await Promise.all([
+                fetchTable('programs'),
+                fetchTable('donations', 'createdAt'),
+                fetchTable('expenses'),
+                fetchTable('volunteers'),
+                fetchTable('bankAccounts'),
+                fetchTable('gallery')
+            ]);
+            if (progs) state.programs = progs;
+            if (dons) state.donations = dons;
+            if (exps) state.expenses = exps;
+            if (vols) state.volunteers = vols;
+            if (banks) state.bankAccounts = banks;
+            if (gals) state.gallery = gals;
+
             renderAllData();
             initGallery();
             markSynced();
         }
 
-        // Ambil seluruh baris dari sebuah tabel Supabase
+        // Ambil seluruh baris dari sebuah tabel Supabase.
+        // Mengembalikan null bila gagal (bukan array kosong) supaya data lokal yang sudah ada tidak tertimpa/hilang.
         async function fetchTable(table, orderCol) {
-            let q = window.sb.from(table).select('*');
-            if (orderCol) q = q.order(orderCol, { ascending: false });
-            const { data, error } = await q;
-            if (error) { showListenerError(table, error); return []; }
-            return data || [];
+            try {
+                let q = window.sb.from(table).select('*');
+                if (orderCol) q = q.order(orderCol, { ascending: false });
+                const { data, error } = await q;
+                if (error) { showListenerError(table, error); return null; }
+                return data || [];
+            } catch (err) {
+                showListenerError(table, err);
+                return null;
+            }
         }
 
         function switchTab(viewId) {
