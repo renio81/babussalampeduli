@@ -45,7 +45,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-    <!-- ============ SUPABASE (POSTGRES REALTIME) ============ -->
+    <!-- ============ SUPABASE (DATABASE PENYIMPANAN DATA) ============ -->
     <!-- GANTI SUPABASE_URL dan SUPABASE_ANON_KEY di bawah ini dengan milik project Supabase kamu -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script>
@@ -942,7 +942,7 @@
                         </button>
                     </div>
 
-                    <!-- Status Sinkronisasi Realtime -->
+                    <!-- Status Koneksi Database -->
                     <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div class="flex items-center gap-3">
                             <span id="sync-status-dot" class="w-2.5 h-2.5 rounded-full bg-slate-300 shrink-0"></span>
@@ -1778,7 +1778,7 @@
 
             if (isDbActive()) {
                 dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0 animate-pulse';
-                label.innerText = 'Realtime Aktif — Terhubung ke Supabase';
+                label.innerText = 'Terhubung ke Supabase — data tersimpan otomatis';
                 label.className = 'text-xs font-bold text-emerald-700';
             } else {
                 const ds = window.dbState || {};
@@ -1800,22 +1800,13 @@
 
             try {
                 if (isDbActive()) {
-                    // Sudah realtime — tarik ulang seluruh data terbaru langsung dari Supabase
-                    const [progRes, donRes, expRes, volRes, bankRes, galRes] = await Promise.all([
-                        window.sb.from('programs').select('*'),
-                        window.sb.from('donations').select('*').order('createdAt', { ascending: false }),
-                        window.sb.from('expenses').select('*'),
-                        window.sb.from('volunteers').select('*'),
-                        window.sb.from('bankAccounts').select('*'),
-                        window.sb.from('gallery').select('*')
-                    ]);
-
-                    if (progRes.data) state.programs = progRes.data;
-                    if (donRes.data) state.donations = donRes.data;
-                    if (expRes.data) state.expenses = expRes.data;
-                    if (volRes.data) state.volunteers = volRes.data;
-                    if (bankRes.data) state.bankAccounts = bankRes.data;
-                    if (galRes.data) state.gallery = galRes.data;
+                    // Tarik ulang seluruh data terbaru langsung dari Supabase
+                    state.programs = await fetchTable('programs');
+                    state.donations = await fetchTable('donations', 'createdAt');
+                    state.expenses = await fetchTable('expenses');
+                    state.volunteers = await fetchTable('volunteers');
+                    state.bankAccounts = await fetchTable('bankAccounts');
+                    state.gallery = await fetchTable('gallery');
 
                     renderAllData();
                     initGallery();
@@ -1844,17 +1835,17 @@
 
             if (type === 'connected') {
                 banner.className = 'fixed top-0 left-0 right-0 z-[70] text-center text-[11px] font-semibold py-2 px-4 bg-emerald-600 text-white';
-                text.innerHTML = '<i class="fa-solid fa-circle-check"></i> Terhubung ke Supabase — data tersinkron real-time';
+                text.innerHTML = '<i class="fa-solid fa-circle-check"></i> Terhubung ke Supabase — perubahan data otomatis tersimpan';
                 setTimeout(() => banner.classList.add('hidden'), 4000);
             } else if (type === 'error') {
                 banner.className = 'fixed top-0 left-0 right-0 z-[70] text-center text-[11px] font-semibold py-2 px-4 bg-rose-600 text-white';
                 text.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Gagal terhubung ke Supabase${message ? ' (' + message + ')' : ''} — mode lokal sementara digunakan`;
             } else if (type === 'listener-error') {
                 banner.className = 'fixed top-0 left-0 right-0 z-[70] text-center text-[11px] font-semibold py-2 px-4 bg-rose-600 text-white cursor-pointer';
-                text.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Sinkronisasi realtime gagal (${message || 'unknown error'}) — cek Row Level Security Policy di Supabase`;
+                text.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Gagal mengambil data (${message || 'unknown error'}) — cek Row Level Security Policy di Supabase`;
             } else {
                 banner.className = 'fixed top-0 left-0 right-0 z-[70] text-center text-[11px] font-semibold py-2 px-4 bg-amber-500 text-white';
-                text.innerHTML = '<i class="fa-solid fa-plug-circle-exclamation"></i> Supabase belum dikonfigurasi — data berjalan di mode lokal (tidak realtime)';
+                text.innerHTML = '<i class="fa-solid fa-plug-circle-exclamation"></i> Supabase belum dikonfigurasi — data berjalan di mode lokal (tidak tersimpan permanen)';
             }
         }
 
@@ -1931,15 +1922,7 @@
                 console.error('Gagal seeding galeri awal ke Supabase:', err);
             }
 
-            // Ambil data awal untuk seluruh tabel
-            async function fetchTable(table, orderCol) {
-                let q = sb.from(table).select('*');
-                if (orderCol) q = q.order(orderCol, { ascending: false });
-                const { data, error } = await q;
-                if (error) { showListenerError(table, error); return []; }
-                return data || [];
-            }
-
+            // Ambil data terbaru untuk seluruh tabel (dipanggil saat halaman dibuka & saat sinkron manual)
             state.programs = await fetchTable('programs');
             state.donations = await fetchTable('donations', 'createdAt');
             state.expenses = await fetchTable('expenses');
@@ -1949,28 +1932,15 @@
             renderAllData();
             initGallery();
             markSynced();
+        }
 
-            // Berlangganan Realtime: setiap ada perubahan di tabel, tarik ulang data tabel tsb
-            const channel = sb.channel('babussalampeduli-realtime');
-
-            const tablesConfig = [
-                { table: 'programs', onChange: async () => { state.programs = await fetchTable('programs'); renderAllData(); markSynced(); } },
-                { table: 'donations', onChange: async () => { state.donations = await fetchTable('donations', 'createdAt'); renderAllData(); markSynced(); } },
-                { table: 'expenses', onChange: async () => { state.expenses = await fetchTable('expenses'); renderAllData(); markSynced(); } },
-                { table: 'volunteers', onChange: async () => { state.volunteers = await fetchTable('volunteers'); refreshAllStats(); markSynced(); } },
-                { table: 'bankAccounts', onChange: async () => { state.bankAccounts = await fetchTable('bankAccounts'); renderAdminBankAccounts(); renderDonorBankAccounts(); markSynced(); } },
-                { table: 'gallery', onChange: async () => { state.gallery = await fetchTable('gallery'); renderAdminGallery(); initGallery(); markSynced(); } }
-            ];
-
-            tablesConfig.forEach(({ table, onChange }) => {
-                channel.on('postgres_changes', { event: '*', schema: 'public', table }, onChange);
-            });
-
-            channel.subscribe((status, err) => {
-                if (status === 'CHANNEL_ERROR' || err) {
-                    showListenerError('realtime-channel', err || new Error(status));
-                }
-            });
+        // Ambil seluruh baris dari sebuah tabel Supabase
+        async function fetchTable(table, orderCol) {
+            let q = window.sb.from(table).select('*');
+            if (orderCol) q = q.order(orderCol, { ascending: false });
+            const { data, error } = await q;
+            if (error) { showListenerError(table, error); return []; }
+            return data || [];
         }
 
         function switchTab(viewId) {
@@ -2515,7 +2485,7 @@
             }
         }
 
-        // Refresh tampilan rekening di layar donatur bila sedang ditampilkan (dipanggil saat data bank berubah realtime)
+        // Refresh tampilan rekening di layar donatur bila sedang ditampilkan (dipanggil setiap ada perubahan data bank)
         function renderDonorBankAccounts() {
             const el = document.getElementById('donor-bank-list');
             if (!el) return;
