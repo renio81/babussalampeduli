@@ -1771,7 +1771,7 @@
 
             if (isDbActive()) {
                 dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0 animate-pulse';
-                label.innerText = 'Terhubung ke Supabase — data tersimpan otomatis';
+                label.innerText = 'Realtime Aktif — Terhubung ke Supabase';
                 label.className = 'text-xs font-bold text-emerald-700';
             } else {
                 const ds = window.dbState || {};
@@ -1840,7 +1840,7 @@
             const text = document.getElementById('db-status-text');
             if (!banner || !text) return;
             banner.className = 'fixed top-0 left-0 right-0 z-[70] text-center text-[11px] font-semibold py-2 px-4 bg-emerald-600 text-white';
-            text.innerHTML = '<i class="fa-solid fa-circle-check"></i> Terhubung ke Supabase — perubahan data otomatis tersimpan';
+            text.innerHTML = '<i class="fa-solid fa-circle-check"></i> Terhubung ke Supabase — data tersinkron real-time ke semua layar';
             banner.classList.remove('hidden');
             setTimeout(() => banner.classList.add('hidden'), 4000);
         }
@@ -1934,6 +1934,39 @@
             renderAllData();
             initGallery();
             markSynced();
+
+            // Berlangganan Realtime: begitu ada perubahan di tabel manapun (dari device manapun),
+            // tarik ulang data tabel tsb agar semua layar yang terbuka otomatis ikut update.
+            if (window.realtimeChannel) {
+                try { sb.removeChannel(window.realtimeChannel); } catch (e) { /* abaikan */ }
+            }
+            const channel = sb.channel('babussalampeduli-realtime');
+            window.realtimeChannel = channel;
+
+            const tablesConfig = [
+                { table: 'programs', apply: async () => { const d = await fetchTable('programs'); if (d) state.programs = d; renderAllData(); markSynced(); } },
+                { table: 'donations', apply: async () => { const d = await fetchTable('donations', 'createdAt'); if (d) state.donations = d; renderAllData(); markSynced(); } },
+                { table: 'expenses', apply: async () => { const d = await fetchTable('expenses'); if (d) state.expenses = d; renderAllData(); markSynced(); } },
+                { table: 'volunteers', apply: async () => { const d = await fetchTable('volunteers'); if (d) state.volunteers = d; refreshAllStats(); markSynced(); } },
+                { table: 'bankAccounts', apply: async () => { const d = await fetchTable('bankAccounts'); if (d) state.bankAccounts = d; renderAdminBankAccounts(); renderDonorBankAccounts(); markSynced(); } },
+                { table: 'gallery', apply: async () => { const d = await fetchTable('gallery'); if (d) state.gallery = d; renderAdminGallery(); initGallery(); markSynced(); } }
+            ];
+
+            tablesConfig.forEach(({ table, apply }) => {
+                channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => {
+                    apply().catch(err => console.warn(`Gagal memproses perubahan realtime tabel "${table}":`, err));
+                });
+            });
+
+            channel.subscribe((status, err) => {
+                // Kegagalan langganan realtime dicatat diam-diam saja, tidak mengganggu tampilan pengguna.
+                // Aplikasi tetap berfungsi normal (data tetap tersimpan & bisa disinkron manual via tombol "Sinkronkan Sekarang").
+                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || err) {
+                    console.warn('Realtime channel status:', status, err || '');
+                } else if (status === 'SUBSCRIBED') {
+                    console.info('Realtime channel aktif — perubahan data akan otomatis tersinkron ke semua layar.');
+                }
+            });
         }
 
         // Ambil seluruh baris dari sebuah tabel Supabase.
