@@ -1967,6 +1967,40 @@
                     console.info('Realtime channel aktif — perubahan data akan otomatis tersinkron ke semua layar.');
                 }
             });
+
+            // Auto-refresh berkala (polling) sebagai JAMINAN tambahan di luar Realtime.
+            // Ini memastikan semua layar tetap ter-update otomatis meskipun Realtime channel
+            // di atas gagal terhubung (misalnya karena pengaturan Realtime di Supabase belum aktif).
+            startAutoPolling();
+        }
+
+        let autoPollTimer = null;
+        function startAutoPolling() {
+            if (autoPollTimer) clearInterval(autoPollTimer);
+            autoPollTimer = setInterval(async () => {
+                if (!isDbActive()) return;
+                const [progs, dons, exps, vols, banks, gals] = await Promise.all([
+                    fetchTable('programs'),
+                    fetchTable('donations', 'createdAt'),
+                    fetchTable('expenses'),
+                    fetchTable('volunteers'),
+                    fetchTable('bankAccounts'),
+                    fetchTable('gallery')
+                ]);
+                let changed = false;
+                if (progs && JSON.stringify(progs) !== JSON.stringify(state.programs)) { state.programs = progs; changed = true; }
+                if (dons && JSON.stringify(dons) !== JSON.stringify(state.donations)) { state.donations = dons; changed = true; }
+                if (exps && JSON.stringify(exps) !== JSON.stringify(state.expenses)) { state.expenses = exps; changed = true; }
+                if (vols && JSON.stringify(vols) !== JSON.stringify(state.volunteers)) { state.volunteers = vols; changed = true; }
+                if (banks && JSON.stringify(banks) !== JSON.stringify(state.bankAccounts)) { state.bankAccounts = banks; changed = true; }
+                if (gals && JSON.stringify(gals) !== JSON.stringify(state.gallery)) { state.gallery = gals; changed = true; }
+
+                if (changed) {
+                    renderAllData();
+                    initGallery();
+                    markSynced();
+                }
+            }, 5000); // cek setiap 5 detik
         }
 
         // Ambil seluruh baris dari sebuah tabel Supabase.
